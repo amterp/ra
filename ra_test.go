@@ -165,12 +165,6 @@ func Test_Cmds(t *testing.T) {
 	assert.Equal(t, "test.txt", *addFile)
 }
 
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   Positional arguments: basic assignment rules
-   ────────────────────────────────────────────────────────────────────────────
-*/
-
 // --arg1 already set, so "bbb" falls into arg2
 func Test_PositionalAssignmentLeftToRight(t *testing.T) {
 	fs := NewCmd("test")
@@ -197,12 +191,6 @@ func Test_PositionalThenNamedFlagOverride(t *testing.T) {
 	assert.Equal(t, "bbb", *arg1) // named flag overrides positional
 	assert.Equal(t, "", *arg2)    // no value assigned
 }
-
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   Short‑flag clusters
-   ────────────────────────────────────────────────────────────────────────────
-*/
 
 // -bcd where b,c,d are bools; “aaa” becomes first positional arg
 func Test_ShortBoolCluster(t *testing.T) {
@@ -240,12 +228,6 @@ func Test_ShortClusterEndsWithNonBool(t *testing.T) {
 	assert.Equal(t, "ddd", *c)
 }
 
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   Negative numbers & “number‑shorts” mode
-   ────────────────────────────────────────────────────────────────────────────
-*/
-
 // No int‑shorts defined → “-1” and “-2” are values, not flags.
 func Test_NegativeIntsWithoutNumberShortMode(t *testing.T) {
 	fs := NewCmd("test")
@@ -276,12 +258,6 @@ func Test_NumberShortsMode(t *testing.T) {
 	assert.Equal(t, 42, *arg2)   // “-2” consumed flag, next token 42
 }
 
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   Variadic positional & multiple variadics
-   ────────────────────────────────────────────────────────────────────────────
-*/
-
 func Test_PositionalAndFlagVariadics(t *testing.T) {
 	fs := NewCmd("test")
 
@@ -297,12 +273,6 @@ func Test_PositionalAndFlagVariadics(t *testing.T) {
 	assert.Equal(t, []string{"aaa", "bbb"}, *posVar)
 	assert.Equal(t, []string{"ccc", "ddd", "eee"}, *flagVar)
 }
-
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   Configured() helper & unknown‑flag error
-   ────────────────────────────────────────────────────────────────────────────
-*/
 
 func Test_ConfiguredAndDefaults(t *testing.T) {
 	fs := NewCmd("test")
@@ -323,12 +293,6 @@ func Test_UnknownFlagProducesError(t *testing.T) {
 	err := fs.ParseOrError([]string{"--does-not-exist"})
 	assert.NotNil(t, err)
 }
-
-/*
-   ───────────────────────────────────────────────────────
-   Additional flag types: Int64, Float64, Bool slices
-   ────────────────────────────────────────────────────────────────────────────
-*/
 
 func Test_Int64Flag(t *testing.T) {
 	fs := NewCmd("test")
@@ -362,12 +326,6 @@ func Test_BoolSliceFlag(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, []bool{true, false, true, false}, *boolSliceFlag)
 }
-
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   String constraints: Enum and Regex
-   ────────────────────────────────────────────────────────────────────────────
-*/
 
 func Test_StringEnumConstraint(t *testing.T) {
 	fs := NewCmd("test")
@@ -422,12 +380,6 @@ func Test_StringRegexConstraintError(t *testing.T) {
 	assert.Contains(t, err.Error(), "must match regex: ^[A-Z][a-z]*$")
 }
 
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   Float64 constraints
-   ────────────────────────────────────────────────────────────────────────────
-*/
-
 func Test_Float64RangeConstraint(t *testing.T) {
 	fs := NewCmd("test")
 
@@ -455,12 +407,6 @@ func Test_Float64RangeConstraintError(t *testing.T) {
 	assert.NotNil(t, err)
 }
 
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   Global flags
-   ────────────────────────────────────────────────────────────────────────────
-*/
-
 func Test_GlobalFlags(t *testing.T) {
 	subCmd := NewCmd("sub")
 	subArg, _ := NewString("subarg").Register(subCmd)
@@ -481,12 +427,6 @@ func Test_GlobalFlags(t *testing.T) {
 	assert.True(t, *subInvoked)
 	assert.Equal(t, "test", *subArg)
 }
-
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   Mutual exclusivity and requirements
-   ────────────────────────────────────────────────────────────────────────────
-*/
 
 func Test_MutuallyExclusiveFlags(t *testing.T) {
 	fs := NewCmd("test")
@@ -622,12 +562,6 @@ func Test_RequiredFlags(t *testing.T) {
 	assert.Equal(t, "value2", *flag2)
 }
 
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   Flag-only and positional-only flags
-   ────────────────────────────────────────────────────────────────────────────
-*/
-
 func Test_FlagOnlyFlag(t *testing.T) {
 	fs := NewCmd("test")
 
@@ -663,12 +597,6 @@ func Test_PositionalOnlyFlag(t *testing.T) {
 	assert.Equal(t, "positional1", *posOnly)
 	assert.Equal(t, "value2", *normalFlag)
 }
-
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   Examples from EXAMPLES.md
-   ────────────────────────────────────────────────────────────────────────────
-*/
 
 // Example: mycmd aaa bbb
 func Test_ExampleBasicPositional(t *testing.T) {
@@ -887,12 +815,6 @@ func Test_ExampleMultipleVariadics(t *testing.T) {
 	assert.Equal(t, "fff", *arg4)
 }
 
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   Hidden flags and help functionality
-   ────────────────────────────────────────────────────────────────────────────
-*/
-
 func Test_HiddenFlags(t *testing.T) {
 	fs := NewCmd("test")
 
@@ -905,12 +827,6 @@ func Test_HiddenFlags(t *testing.T) {
 	assert.Equal(t, "value1", *visible)
 	assert.Equal(t, "value2", *hidden)
 }
-
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   Unknown args handling
-   ────────────────────────────────────────────────────────────────────────────
-*/
 
 func Test_IgnoreUnknownArgs(t *testing.T) {
 	fs := NewCmd("test")
@@ -926,12 +842,6 @@ func Test_IgnoreUnknownArgs(t *testing.T) {
 	assert.Contains(t, unknownArgs, "ignored")
 	assert.Contains(t, unknownArgs, "positional")
 }
-
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   Various slice flag options
-   ────────────────────────────────────────────────────────────────────────────
-*/
 
 func Test_IntSliceFlag(t *testing.T) {
 	fs := NewCmd("test")
@@ -962,12 +872,6 @@ func Test_Float64SliceFlag(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, []float64{1.1, 2.2, 3.3}, *floatSlice)
 }
-
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   Edge cases and error conditions
-   ────────────────────────────────────────────────────────────────────────────
-*/
 
 func Test_DuplicateFlagRegistration(t *testing.T) {
 	fs := NewCmd("test")
@@ -1049,12 +953,6 @@ func Test_EmptyArgsWithDefault(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "default", *flag)
 }
-
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   New Parse, Help, and Usage Tests
-   ────────────────────────────────────────────────────────────────────────────
-*/
 
 // mockExitWriter is a test implementation of StderrWriter
 type mockExitWriter struct {
@@ -1498,12 +1396,6 @@ func Test_GlobalFlagsAreFlagOnly(t *testing.T) {
 	assert.False(t, foundGlobalInPositional, "global flag should NOT be in positional list")
 	assert.True(t, foundRegularInPositional, "regular flag should be in positional list")
 }
-
-/*
-   ────────────────────────────────────────────────────────────────────────────
-   Boolean flag relational constraints - only considered configured when true
-   ────────────────────────────────────────────────────────────────────────────
-*/
 
 func Test_BoolFlagRequires_OnlyWhenTrue(t *testing.T) {
 	fs := NewCmd("test")
@@ -2388,4 +2280,404 @@ func Test_DoubleDash_WithEqualsFlag(t *testing.T) {
 
 	assert.Equal(t, "value", *flag1)
 	assert.Equal(t, []string{"--flag2=value2"}, *args)
+}
+
+func Test_ParentPositionalArgs_WithSubcommands_SubcommandTakesPrecedence(t *testing.T) {
+	// Test that subcommands take precedence over parent positional args
+	parentCmd := NewCmd("parent")
+
+	// Parent has a positional argument
+	parentArg, err := NewString("parent-arg").
+		SetUsage("Parent positional argument").
+		Register(parentCmd)
+	assert.NoError(t, err)
+
+	// Create subcommand with same name as a potential argument value
+	subCmd := NewCmd("sub")
+	subArg, err := NewString("sub-arg").
+		SetUsage("Subcommand argument").
+		Register(subCmd)
+	assert.NoError(t, err)
+
+	_, err = parentCmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	// Test: "sub" should be interpreted as subcommand, not parent positional arg
+	err = parentCmd.ParseOrError([]string{"sub", "value"})
+	assert.NoError(t, err)
+
+	// Parent arg should not be set since subcommand was invoked
+	assert.False(t, parentCmd.Configured("parent-arg"))
+	assert.Equal(t, "", *parentArg) // default empty string
+
+	// Subcommand arg should be set
+	assert.True(t, subCmd.Configured("sub-arg"))
+	assert.Equal(t, "value", *subArg)
+}
+
+func Test_ParentPositionalArgs_NoSubcommandMatch_ParentArgsFilled(t *testing.T) {
+	// Test that parent positional args are filled when no subcommand matches
+	parentCmd := NewCmd("parent")
+
+	// Parent has positional arguments
+	arg1, err := NewString("arg1").
+		SetUsage("First argument").
+		Register(parentCmd)
+	assert.NoError(t, err)
+
+	arg2, err := NewString("arg2").
+		SetUsage("Second argument").
+		Register(parentCmd)
+	assert.NoError(t, err)
+
+	// Create subcommand that won't match
+	subCmd := NewCmd("subcmd")
+	_, err = parentCmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	// Test: arguments that don't match subcommand names should be treated as positional
+	err = parentCmd.ParseOrError([]string{"value1", "value2"})
+	assert.NoError(t, err)
+
+	// Parent args should be filled
+	assert.True(t, parentCmd.Configured("arg1"))
+	assert.True(t, parentCmd.Configured("arg2"))
+	assert.Equal(t, "value1", *arg1)
+	assert.Equal(t, "value2", *arg2)
+}
+
+func Test_ParentRequiredPositionalArgs_ErrorWhenSubcommandInvoked(t *testing.T) {
+	// Test behavior when parent has required positional args but subcommand is invoked
+	parentCmd := NewCmd("parent")
+
+	// Parent has required positional argument
+	parentArg, err := NewString("required-arg").
+		SetUsage("Required parent argument").
+		Register(parentCmd) // Not optional, so required
+	assert.NoError(t, err)
+
+	// Create subcommand
+	subCmd := NewCmd("sub")
+	subArg, err := NewString("sub-arg").
+		SetUsage("Subcommand argument").
+		SetOptional(true).
+		Register(subCmd)
+	assert.NoError(t, err)
+
+	_, err = parentCmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	// Test: invoking subcommand should work even if parent has required args
+	// This tests the current behavior - subcommands bypass parent validation
+	err = parentCmd.ParseOrError([]string{"sub"})
+	assert.NoError(t, err)
+
+	// Parent required arg is not set, but no error since subcommand was invoked
+	assert.False(t, parentCmd.Configured("required-arg"))
+	assert.Equal(t, "", *parentArg)
+
+	// Subcommand is invoked, but sub-arg is optional and not provided
+	assert.False(t, subCmd.Configured("sub-arg"))
+	assert.Equal(t, "", *subArg) // optional, so empty string default
+}
+
+func Test_ParentPositionalArgs_MixedWithFlags_SubcommandHandling(t *testing.T) {
+	// Test complex scenario with parent flags, positional args, and subcommands
+	parentCmd := NewCmd("parent")
+
+	// Parent flag
+	parentFlag, err := NewBool("verbose").
+		SetShort("v").
+		SetOptional(true).
+		Register(parentCmd)
+	assert.NoError(t, err)
+
+	// Parent positional arg
+	parentArg, err := NewString("input").
+		SetUsage("Input file").
+		SetOptional(true).
+		Register(parentCmd)
+	assert.NoError(t, err)
+
+	// Subcommand
+	subCmd := NewCmd("process")
+	subArg, err := NewString("output").
+		SetUsage("Output file").
+		Register(subCmd)
+	assert.NoError(t, err)
+
+	_, err = parentCmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	// Test: parent flag + subcommand + subcommand args
+	err = parentCmd.ParseOrError([]string{"--verbose", "process", "output.txt"})
+	assert.NoError(t, err)
+
+	// Parent flag should be set
+	assert.True(t, *parentFlag)
+	assert.True(t, parentCmd.Configured("verbose"))
+
+	// Parent positional arg should NOT be set (subcommand takes precedence)
+	assert.False(t, parentCmd.Configured("input"))
+	assert.Equal(t, "", *parentArg)
+
+	// Subcommand arg should be set
+	assert.True(t, subCmd.Configured("output"))
+	assert.Equal(t, "output.txt", *subArg)
+}
+
+func Test_ParentVariadicPositionalArgs_WithSubcommands(t *testing.T) {
+	// Test variadic positional args in parent when subcommands are present
+	parentCmd := NewCmd("parent")
+
+	// Parent variadic positional args
+	files, err := NewStringSlice("files").
+		SetUsage("Input files").
+		SetVariadic(true).
+		SetOptional(true).
+		Register(parentCmd)
+	assert.NoError(t, err)
+
+	// Subcommand
+	subCmd := NewCmd("convert")
+	subArg, err := NewString("format").
+		SetUsage("Output format").
+		Register(subCmd)
+	assert.NoError(t, err)
+
+	_, err = parentCmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	// Test: subcommand should take precedence over variadic collection
+	err = parentCmd.ParseOrError([]string{"convert", "pdf"})
+	assert.NoError(t, err)
+
+	// Variadic parent args should not collect "convert"
+	assert.False(t, parentCmd.Configured("files"))
+	assert.Equal(t, []string{}, *files)
+
+	// Subcommand should be invoked
+	assert.True(t, subCmd.Configured("format"))
+	assert.Equal(t, "pdf", *subArg)
+
+	// Test: non-subcommand args should be collected as variadic
+	err = parentCmd.ParseOrError([]string{"file1.txt", "file2.txt", "file3.txt"})
+	assert.NoError(t, err)
+
+	assert.True(t, parentCmd.Configured("files"))
+	assert.Equal(t, []string{"file1.txt", "file2.txt", "file3.txt"}, *files)
+}
+
+func Test_SubcommandPositionalArgs_AfterDoubleDash(t *testing.T) {
+	// Test that double dash works correctly with subcommand positional args
+	parentCmd := NewCmd("parent")
+
+	// Parent flag
+	parentFlag, err := NewBool("debug").
+		SetShort("d").
+		SetOptional(true).
+		Register(parentCmd)
+	assert.NoError(t, err)
+
+	// Subcommand with positional args
+	subCmd := NewCmd("execute")
+
+	// Required positional arg
+	script, err := NewString("script").
+		SetUsage("Script to execute").
+		Register(subCmd)
+	assert.NoError(t, err)
+
+	// Variadic positional args for script arguments
+	args, err := NewStringSlice("args").
+		SetUsage("Script arguments").
+		SetVariadic(true).
+		SetOptional(true).
+		Register(subCmd)
+	assert.NoError(t, err)
+
+	_, err = parentCmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	// Test: parent flag + subcommand + positional args including flag-like values after --
+	err = parentCmd.ParseOrError([]string{"--debug", "execute", "myscript.sh", "--", "--verbose", "-x", "file.txt"})
+	assert.NoError(t, err)
+
+	// Parent flag should be set
+	assert.True(t, *parentFlag)
+
+	// Subcommand args should be parsed correctly
+	assert.Equal(t, "myscript.sh", *script)
+	assert.Equal(t, []string{"--verbose", "-x", "file.txt"}, *args)
+}
+
+func Test_SubcommandName_ConflictWithParentPositionalValue(t *testing.T) {
+	// Test edge case where subcommand name could be valid value for parent positional arg
+	parentCmd := NewCmd("parent")
+
+	// Parent positional arg that could accept subcommand name as valid value
+	mode, err := NewString("mode").
+		SetUsage("Operation mode").
+		SetEnumConstraint([]string{"create", "delete", "update", "sub"}).
+		Register(parentCmd)
+	assert.NoError(t, err)
+
+	// Subcommand named "sub" - same as valid enum value
+	subCmd := NewCmd("sub")
+	subArg, err := NewString("target").
+		SetUsage("Target for sub operation").
+		Register(subCmd)
+	assert.NoError(t, err)
+
+	_, err = parentCmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	// Test: "sub" should be interpreted as subcommand, not as parent positional value
+	err = parentCmd.ParseOrError([]string{"sub", "mytarget"})
+	assert.NoError(t, err)
+
+	// Parent mode should not be set
+	assert.False(t, parentCmd.Configured("mode"))
+	assert.Equal(t, "", *mode)
+
+	// Subcommand should be invoked
+	assert.True(t, subCmd.Configured("target"))
+	assert.Equal(t, "mytarget", *subArg)
+
+	// Test: explicit parent mode setting should work when not matching subcommand
+	err = parentCmd.ParseOrError([]string{"create"})
+	assert.NoError(t, err)
+
+	assert.True(t, parentCmd.Configured("mode"))
+	assert.Equal(t, "create", *mode)
+}
+
+func Test_MultipleFlagsBeforeSubcommand_WithPositionalArgs(t *testing.T) {
+	// Test multiple parent flags before subcommand with positional args
+	parentCmd := NewCmd("deploy")
+
+	// Parent flags
+	verbose, err := NewBool("verbose").
+		SetShort("v").
+		SetOptional(true).
+		Register(parentCmd)
+	assert.NoError(t, err)
+
+	dryRun, err := NewBool("dry-run").
+		SetShort("n").
+		SetOptional(true).
+		Register(parentCmd)
+	assert.NoError(t, err)
+
+	env, err := NewString("env").
+		SetShort("e").
+		SetOptional(true).
+		Register(parentCmd)
+	assert.NoError(t, err)
+
+	// Subcommand
+	appCmd := NewCmd("app")
+
+	appName, err := NewString("name").
+		SetUsage("Application name").
+		Register(appCmd)
+	assert.NoError(t, err)
+
+	version, err := NewString("version").
+		SetUsage("Version to deploy").
+		SetOptional(true).
+		Register(appCmd)
+	assert.NoError(t, err)
+
+	_, err = parentCmd.RegisterCmd(appCmd)
+	assert.NoError(t, err)
+
+	// Test: multiple parent flags + subcommand + subcommand positional args
+	err = parentCmd.ParseOrError([]string{"--verbose", "--dry-run", "--env", "staging", "app", "myapp", "v1.2.3"})
+	assert.NoError(t, err)
+
+	// All parent flags should be set
+	assert.True(t, *verbose)
+	assert.True(t, *dryRun)
+	assert.Equal(t, "staging", *env)
+
+	// Subcommand positional args should be set
+	assert.Equal(t, "myapp", *appName)
+	assert.Equal(t, "v1.2.3", *version)
+}
+
+func Test_GlobalFlagsInheritedBySubcommand_WithPositionalArgs(t *testing.T) {
+	// Test that global flags work correctly with subcommand positional args
+	parentCmd := NewCmd("build")
+
+	// Global flag
+	outputDir, err := NewString("output-dir").
+		SetShort("o").
+		SetUsage("Output directory").
+		SetOptional(true).
+		Register(parentCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Subcommand
+	dockerCmd := NewCmd("docker")
+
+	tag, err := NewString("tag").
+		SetUsage("Docker image tag").
+		Register(dockerCmd)
+	assert.NoError(t, err)
+
+	context, err := NewString("context").
+		SetUsage("Build context").
+		SetOptional(true).
+		Register(dockerCmd)
+	assert.NoError(t, err)
+
+	_, err = parentCmd.RegisterCmd(dockerCmd)
+	assert.NoError(t, err)
+
+	// Test: global flag set during subcommand parsing with positional args
+	err = parentCmd.ParseOrError([]string{"docker", "--output-dir", "/tmp/build", "v1.0", "."})
+	assert.NoError(t, err)
+
+	// Global flag should be accessible from both parent and subcommand
+	assert.True(t, parentCmd.Configured("output-dir"))
+	assert.True(t, dockerCmd.Configured("output-dir"))
+	assert.Equal(t, "/tmp/build", *outputDir)
+
+	// Subcommand positional args should be correctly parsed
+	assert.Equal(t, "v1.0", *tag)
+	assert.Equal(t, ".", *context)
+}
+
+func Test_ErrorHandling_SubcommandWithMissingRequiredPositional(t *testing.T) {
+	// Test error handling when subcommand is missing required positional args
+	parentCmd := NewCmd("main")
+
+	// Parent optional flag
+	debug, err := NewBool("debug").
+		SetOptional(true).
+		Register(parentCmd)
+	assert.NoError(t, err)
+
+	// Subcommand with required positional arg
+	processCmd := NewCmd("process")
+
+	inputFile, err := NewString("input").
+		SetUsage("Input file path").
+		Register(processCmd) // Required by default
+	assert.NoError(t, err)
+
+	_, err = parentCmd.RegisterCmd(processCmd)
+	assert.NoError(t, err)
+
+	// Test: subcommand invoked but missing required positional arg should error
+	err = parentCmd.ParseOrError([]string{"--debug", "process"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Missing required arguments")
+	assert.Contains(t, err.Error(), "input")
+
+	// Parent flag should still be set despite subcommand error
+	assert.True(t, *debug)
+
+	_ = inputFile // Suppress unused variable warning
 }

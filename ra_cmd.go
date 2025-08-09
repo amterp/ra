@@ -4,6 +4,22 @@ import (
 	"fmt"
 )
 
+type UsageHeaders struct {
+	Usage         string
+	Commands      string
+	Arguments     string
+	GlobalOptions string
+}
+
+func DefaultUsageHeaders() UsageHeaders {
+	return UsageHeaders{
+		Usage:         "Usage:",
+		Commands:      "Commands:",
+		Arguments:     "Arguments:",
+		GlobalOptions: "Global options:",
+	}
+}
+
 type Cmd struct {
 	name          string
 	description   string
@@ -15,10 +31,11 @@ type Cmd struct {
 	shortToName   map[string]string // short flag -> full name mapping
 
 	// options
-	customUsage          func(bool) // if set, this function will be called to print usage instead of the default
-	helpEnabled          bool       // default true automatically adds a help flag
-	excludeNameFromUsage bool       // if true, this command will not be included in usage output
-	autoHelpOnNoArgs     bool       // if true, show help when no args provided and required args exist
+	customUsage          func(bool)    // if set, this function will be called to print usage instead of the default
+	helpEnabled          bool          // default true automatically adds a help flag
+	excludeNameFromUsage bool          // if true, this command will not be included in usage output
+	autoHelpOnNoArgs     bool          // if true, show help when no args provided and required args exist
+	usageHeaders         *UsageHeaders // custom headers for usage output
 
 	// state post-parse
 	used             *bool           // after parsing, whether this command was invoked
@@ -65,6 +82,18 @@ func (c *Cmd) SetExcludeNameFromUsage(exclude bool) *Cmd {
 func (c *Cmd) SetAutoHelpOnNoArgs(enable bool) *Cmd {
 	c.autoHelpOnNoArgs = enable
 	return c
+}
+
+func (c *Cmd) SetUsageHeaders(headers UsageHeaders) *Cmd {
+	c.usageHeaders = &headers
+	return c
+}
+
+func (c *Cmd) getUsageHeaders() UsageHeaders {
+	if c.usageHeaders != nil {
+		return *c.usageHeaders
+	}
+	return DefaultUsageHeaders()
 }
 
 func (c *Cmd) applyGlobalFlags(subCmd *Cmd) error {

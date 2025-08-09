@@ -20,13 +20,14 @@ func (c *Cmd) GenerateLongUsage() string {
 
 func (c *Cmd) generateUsage(isLongHelp bool) string {
 	var sb strings.Builder
+	headers := c.getUsageHeaders()
 
 	if c.description != "" {
 		sb.WriteString(c.description)
 		sb.WriteString("\n\n")
 	}
 
-	sb.WriteString("Usage:\n  ")
+	sb.WriteString(headers.Usage + "\n  ")
 	sb.WriteString(c.generateSynopsis(isLongHelp))
 	sb.WriteString("\n")
 
@@ -82,7 +83,7 @@ func (c *Cmd) generateUsage(isLongHelp bool) string {
 	}
 
 	if len(c.subCmds) > 0 {
-		sb.WriteString("\nCommands:\n")
+		sb.WriteString("\n" + headers.Commands + "\n")
 		// Sort subcommand names for consistent output
 		var subCmdNames []string
 		for name := range c.subCmds {
@@ -100,12 +101,12 @@ func (c *Cmd) generateUsage(isLongHelp bool) string {
 	}
 
 	if len(scriptFlags) > 0 {
-		sb.WriteString("\nArguments:\n")
+		sb.WriteString("\n" + headers.Arguments + "\n")
 		sb.WriteString(c.formatFlags(scriptFlags, isLongHelp))
 	}
 
 	if len(globalFlags) > 0 {
-		sb.WriteString("\nGlobal options:\n")
+		sb.WriteString("\n" + headers.GlobalOptions + "\n")
 		sb.WriteString(c.formatFlags(globalFlags, isLongHelp))
 	}
 

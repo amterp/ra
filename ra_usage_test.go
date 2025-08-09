@@ -14,6 +14,66 @@ func init() {
 	color.NoColor = true
 }
 
+func Test_Usage_DefaultHeaders(t *testing.T) {
+	cmd := NewCmd("myapp")
+	cmd.SetDescription("Test default headers")
+
+	_, err := NewString("input").SetUsage("Input file").Register(cmd)
+	assert.NoError(t, err)
+
+	subCmd := NewCmd("subcmd")
+	subCmd.SetDescription("A subcommand")
+	_, err = cmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	_, err = NewString("global").SetUsage("Global flag").Register(cmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	usage := cmd.GenerateUsage(false)
+
+	assert.Contains(t, usage, "Usage:")
+	assert.Contains(t, usage, "Commands:")
+	assert.Contains(t, usage, "Arguments:")
+	assert.Contains(t, usage, "Global options:")
+}
+
+func Test_Usage_CustomHeaders(t *testing.T) {
+	cmd := NewCmd("myapp")
+	cmd.SetDescription("Test custom headers")
+
+	headers := UsageHeaders{
+		Usage:         "How to use:",
+		Commands:      "Available commands:",
+		Arguments:     "Parameters:",
+		GlobalOptions: "Global flags:",
+	}
+	cmd.SetUsageHeaders(headers)
+
+	_, err := NewString("input").SetUsage("Input file").Register(cmd)
+	assert.NoError(t, err)
+
+	subCmd := NewCmd("subcmd")
+	subCmd.SetDescription("A subcommand")
+	_, err = cmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	_, err = NewString("global").SetUsage("Global flag").Register(cmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	usage := cmd.GenerateUsage(false)
+
+	assert.Contains(t, usage, "How to use:")
+	assert.Contains(t, usage, "Available commands:")
+	assert.Contains(t, usage, "Parameters:")
+	assert.Contains(t, usage, "Global flags:")
+
+	// Verify old headers are not present
+	assert.NotContains(t, usage, "Usage:")
+	assert.NotContains(t, usage, "Commands:")
+	assert.NotContains(t, usage, "Arguments:")
+	assert.NotContains(t, usage, "Global options:")
+}
+
 func Test_Usage_SimpleCommand(t *testing.T) {
 	cmd := NewCmd("myapp")
 	cmd.SetDescription("A simple application for testing")

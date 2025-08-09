@@ -517,7 +517,7 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool) (i
 		shortStr := string(short)
 		flagName, exists := c.shortToName[shortStr]
 		if !exists {
-			return 0, fmt.Errorf("unknown short flag: -%s", shortStr)
+			return 0, fmt.Errorf("unknown shorthand flag: '%s' in -%s", shortStr, shortStr)
 		}
 
 		flag := c.flags[flagName]
@@ -673,7 +673,7 @@ func (c *Cmd) assignPositionalWithMode(value string, positionalOnlyMode bool) er
 		}
 	}
 
-	return fmt.Errorf("unexpected positional argument: %s", value)
+	return fmt.Errorf("Too many positional arguments. Unused: [%s]", value)
 }
 
 func (c *Cmd) setStringValue(f *StringFlag, value string) error {

@@ -8,7 +8,7 @@ This document specifies how rad-args should generate and display usage informati
 [Description]
 
 Usage:
-  command [subcommand] <required-arg> [optional-arg] [OPTIONS]
+  command [subcommand] <required-arg> [optional-arg] [other-optional] [OPTIONS]
 
 [Commands section - if any subcommands]
 [Arguments section - for all arguments (merged Arguments + Options)]
@@ -18,6 +18,8 @@ Usage:
 **Important**: Commands and Arguments are alternatives. If a subcommand is specified, it takes precedence and the main command's args become irrelevant - we dive into the subcommand's world.
 
 **Key Paradigm**: All arguments are both flags and positional arguments unless explicitly overridden with `SetPositionalOnly(true)` or they are boolean flags (which are never positional).
+
+**Dual Nature Communication**: The synopsis shows arguments in their positional form (`<arg>`, `[arg]`) while the Arguments section shows them in their flag form (`--arg`). Users understand these refer to the same arguments due to matching names. This allows Ra to communicate both usage patterns without cluttering the synopsis.
 
 **Global Flags**: Global flags registered on parent commands will also appear in subcommand usage generation.
 
@@ -45,7 +47,7 @@ Using the `github.com/amterp/color` library:
 
 ```
 Usage:
-  command [subcommand] <required-arg> [optional-arg] [OPTIONS]
+  command [subcommand] <required-arg> [optional-arg] [other-optional] [OPTIONS]
 ```
 
 **Subcommands:**
@@ -56,9 +58,10 @@ Usage:
 - Required args without defaults: `<name>` in cyan
 - Optional args (marked optional OR have defaults): `[name]` in cyan  
 - Bool flags are never shown in usage line (not positional)
-- Only positional-only args OR required flags appear in usage line
+- ALL positional arguments appear in usage line (both required and optional)
+- The bracket style indicates requirement: `<required>` vs `[optional]`
 - Flags with `excludeNameFromUsage` set will not appear in synopsis but still appear in Arguments section
-- Order: non-bool args first, then bools in Arguments section
+- Order: positional args in registration order, followed by [OPTIONS]
 
 **Options:**
 - Always show `[OPTIONS]` at the end
@@ -283,7 +286,6 @@ Error: Invalid 'name' value: 123abc (Must match pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
 ### Features Requiring Implementation
 
 The following features are specified but not yet implemented in the codebase:
-- **Color integration** with `github.com/amterp/color` library
 - **Constraint display** (ranges, enums, regex patterns) in usage output
 - **Default value display** in usage descriptions
 - **Relationship display** (requires/excludes) in usage descriptions  
@@ -291,7 +293,6 @@ The following features are specified but not yet implemented in the codebase:
 - **Optional flag indicators** `(optional)` markers
 - **Slice separator display** in usage descriptions
 - **Variadic slice formatting** `[type...]` display
-- **Section header customization** functionality
 - **Code fix**: Default flag behavior should be required, not optional
 
 ### Alignment Algorithm

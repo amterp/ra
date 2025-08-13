@@ -203,28 +203,10 @@ func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 		if base.PositionalOnly {
 			positionalOnlyFlags = append(positionalOnlyFlags, name)
 		} else {
-			// Check if it's variadic (always appears in synopsis)
-			isVariadic := false
-			switch f := flag.(type) {
-			case *StringSliceFlag:
-				isVariadic = f.Variadic
-			case *IntSliceFlag:
-				isVariadic = f.Variadic
-			case *Int64SliceFlag:
-				isVariadic = f.Variadic
-			case *Float64SliceFlag:
-				isVariadic = f.Variadic
-			case *BoolSliceFlag:
-				isVariadic = f.Variadic
-			}
-
-			if isVariadic || !base.Optional {
-				// Variadic flags always appear (they're inherently optional)
-				// Non-variadic required flags also appear
-				nonPositionalFlags = append(nonPositionalFlags, name)
-			}
+			// If a flag is in the positional list, it should appear in synopsis
+			// regardless of whether it's optional or not
+			nonPositionalFlags = append(nonPositionalFlags, name)
 		}
-		// Non-variadic optional flags don't appear in synopsis
 	}
 
 	// Add non-positional flags from nonPositional list (they might not be in positional)
@@ -801,24 +783,11 @@ func (c *Cmd) shouldFlagBeOptionalInSynopsis(flag any) bool {
 	}
 
 	// Flag is optional if it has a default OR was explicitly set optional
-	// For now, we'll use a heuristic: check the flag name against known optional flags
-	// This is a workaround until we fix the default behavior
-	if hasDefault {
+	if hasDefault || base.Optional {
 		return true
 	}
 
-	// Special cases for positional-only flags that were explicitly set optional
-	if base.PositionalOnly && (base.Name == "output-dir" || base.Name == "files") {
-		return true
-	}
-
-	// Default to required for positional-only flags without defaults
-	if base.PositionalOnly {
-		return false
-	}
-
-	// For non-positional flags, use default value presence
-	return hasDefault
+	return false
 }
 
 func (c *Cmd) flagHasDefault(flag any) bool {

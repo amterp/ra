@@ -74,6 +74,103 @@ func Test_Usage_CustomHeaders(t *testing.T) {
 	assert.NotContains(t, usage, "Global options:")
 }
 
+func Test_Usage_ColoredHeaders(t *testing.T) {
+	// Temporarily enable colors for this test
+	oldNoColor := color.NoColor
+	color.NoColor = false
+	defer func() {
+		color.NoColor = oldNoColor
+	}()
+
+	cmd := NewCmd("myapp")
+	cmd.SetDescription("Test colored headers")
+
+	_, err := NewString("input").SetUsage("Input file").Register(cmd)
+	assert.NoError(t, err)
+
+	subCmd := NewCmd("subcmd")
+	subCmd.SetDescription("A subcommand")
+	_, err = cmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	_, err = NewString("global").SetUsage("Global flag").Register(cmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	usage := cmd.GenerateUsage(false)
+
+	// Check for ANSI color codes in headers (green bold = \033[32;1m)
+	assert.Contains(t, usage, "\033[32;1mUsage:\033[0;22m")
+	assert.Contains(t, usage, "\033[32;1mCommands:\033[0;22m")
+	assert.Contains(t, usage, "\033[32;1mArguments:\033[0;22m")
+	assert.Contains(t, usage, "\033[32;1mGlobal options:\033[0;22m")
+}
+
+func Test_Usage_CustomColoredHeaders(t *testing.T) {
+	// Temporarily enable colors for this test
+	oldNoColor := color.NoColor
+	color.NoColor = false
+	defer func() {
+		color.NoColor = oldNoColor
+	}()
+
+	cmd := NewCmd("myapp")
+	cmd.SetDescription("Test custom colored headers")
+
+	headers := UsageHeaders{
+		Usage:         "How to use:",
+		Commands:      "Available commands:",
+		Arguments:     "Parameters:",
+		GlobalOptions: "Global flags:",
+	}
+	cmd.SetUsageHeaders(headers)
+
+	_, err := NewString("input").SetUsage("Input file").Register(cmd)
+	assert.NoError(t, err)
+
+	subCmd := NewCmd("subcmd")
+	subCmd.SetDescription("A subcommand")
+	_, err = cmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	_, err = NewString("global").SetUsage("Global flag").Register(cmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	usage := cmd.GenerateUsage(false)
+
+	// Check for ANSI color codes with custom headers
+	assert.Contains(t, usage, "\033[32;1mHow to use:\033[0;22m")
+	assert.Contains(t, usage, "\033[32;1mAvailable commands:\033[0;22m")
+	assert.Contains(t, usage, "\033[32;1mParameters:\033[0;22m")
+	assert.Contains(t, usage, "\033[32;1mGlobal flags:\033[0;22m")
+}
+
+func Test_Usage_ColoredSynopsis(t *testing.T) {
+	// Temporarily enable colors for this test
+	oldNoColor := color.NoColor
+	color.NoColor = false
+	defer func() {
+		color.NoColor = oldNoColor
+	}()
+
+	cmd := NewCmd("myapp")
+	cmd.SetDescription("Test colored synopsis")
+
+	_, err := NewString("input").SetUsage("Input file").Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewString("output").SetUsage("Output file").SetOptional(true).Register(cmd)
+	assert.NoError(t, err)
+
+	usage := cmd.GenerateUsage(false)
+
+	// Check for bold command name and cyan argument types
+	assert.Contains(t, usage, "\033[1mmyapp\033[22m")     // Bold command name
+	assert.Contains(t, usage, "\033[36m<input>\033[0m")   // Cyan required arg
+	assert.Contains(t, usage, "\033[36m[OPTIONS]\033[0m") // Cyan options
+
+	// Note: [output] doesn't appear in synopsis because it's not positional-only and is optional
+}
+
 func Test_Usage_SimpleCommand(t *testing.T) {
 	cmd := NewCmd("myapp")
 	cmd.SetDescription("A simple application for testing")

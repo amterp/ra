@@ -4,6 +4,17 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/amterp/color"
+)
+
+var (
+	greenBold  = color.New(color.FgGreen, color.Bold)
+	cyan       = color.New(color.FgCyan)
+	bold       = color.New(color.Bold)
+	GreenBoldS = greenBold.SprintfFunc()
+	CyanS      = cyan.SprintfFunc()
+	BoldS      = bold.SprintfFunc()
 )
 
 func (c *Cmd) GenerateUsage(isLongHelp bool) string {
@@ -27,7 +38,7 @@ func (c *Cmd) generateUsage(isLongHelp bool) string {
 		sb.WriteString("\n\n")
 	}
 
-	sb.WriteString(headers.Usage + "\n  ")
+	sb.WriteString(GreenBoldS(headers.Usage) + "\n  ")
 	sb.WriteString(c.generateSynopsis(isLongHelp))
 	sb.WriteString("\n")
 
@@ -83,7 +94,7 @@ func (c *Cmd) generateUsage(isLongHelp bool) string {
 	}
 
 	if len(c.subCmds) > 0 {
-		sb.WriteString("\n" + headers.Commands + "\n")
+		sb.WriteString("\n" + GreenBoldS(headers.Commands) + "\n")
 		// Sort subcommand names for consistent output
 		var subCmdNames []string
 		for name := range c.subCmds {
@@ -101,12 +112,12 @@ func (c *Cmd) generateUsage(isLongHelp bool) string {
 	}
 
 	if len(scriptFlags) > 0 {
-		sb.WriteString("\n" + headers.Arguments + "\n")
+		sb.WriteString("\n" + GreenBoldS(headers.Arguments) + "\n")
 		sb.WriteString(c.formatFlags(scriptFlags, isLongHelp))
 	}
 
 	if len(globalFlags) > 0 {
-		sb.WriteString("\n" + headers.GlobalOptions + "\n")
+		sb.WriteString("\n" + GreenBoldS(headers.GlobalOptions) + "\n")
 		sb.WriteString(c.formatFlags(globalFlags, isLongHelp))
 	}
 
@@ -115,10 +126,10 @@ func (c *Cmd) generateUsage(isLongHelp bool) string {
 
 func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 	var sb strings.Builder
-	sb.WriteString(c.name)
+	sb.WriteString(BoldS(c.name))
 
 	if len(c.subCmds) > 0 {
-		sb.WriteString(" [subcommand]")
+		sb.WriteString(" " + CyanS("[subcommand]"))
 		// Still show parent command flags in synopsis even when subcommands exist
 		for _, name := range c.positional {
 			flag := c.flags[name]
@@ -160,13 +171,13 @@ func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 				shouldBeOptional := c.shouldFlagBeOptionalInSynopsis(flag)
 
 				if shouldBeOptional {
-					sb.WriteString(fmt.Sprintf(" [%s]", argName))
+					sb.WriteString(" " + CyanS("[%s]", argName))
 				} else {
-					sb.WriteString(fmt.Sprintf(" <%s>", argName))
+					sb.WriteString(" " + CyanS("<%s>", argName))
 				}
 			}
 		}
-		sb.WriteString(" [OPTIONS]")
+		sb.WriteString(" " + CyanS("[OPTIONS]"))
 		return sb.String()
 	}
 
@@ -294,14 +305,14 @@ func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 		}
 
 		if shouldBeOptional {
-			sb.WriteString(fmt.Sprintf(" [%s]", argName))
+			sb.WriteString(" " + CyanS("[%s]", argName))
 		} else {
-			sb.WriteString(fmt.Sprintf(" <%s>", argName))
+			sb.WriteString(" " + CyanS("<%s>", argName))
 		}
 
 		// Stop after first variadic positional flag
 		if isVariadic {
-			sb.WriteString(" [OPTIONS]")
+			sb.WriteString(" " + CyanS("[OPTIONS]"))
 			return sb.String()
 		}
 	}
@@ -327,22 +338,22 @@ func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 
 		if isVariadic {
 			// All variadic flags show as [name...]
-			sb.WriteString(fmt.Sprintf(" [%s...]", name))
+			sb.WriteString(" " + CyanS("[%s...]", name))
 			// Stop after first variadic flag
-			sb.WriteString(" [OPTIONS]")
+			sb.WriteString(" " + CyanS("[OPTIONS]"))
 			return sb.String()
 		} else {
 			// Non-variadic required flags show as <name>
 			shouldBeOptional := c.shouldFlagBeOptionalInSynopsis(flag)
 			if shouldBeOptional {
-				sb.WriteString(fmt.Sprintf(" [%s]", name))
+				sb.WriteString(" " + CyanS("[%s]", name))
 			} else {
-				sb.WriteString(fmt.Sprintf(" <%s>", name))
+				sb.WriteString(" " + CyanS("<%s>", name))
 			}
 		}
 	}
 
-	sb.WriteString(" [OPTIONS]")
+	sb.WriteString(" " + CyanS("[OPTIONS]"))
 	return sb.String()
 }
 

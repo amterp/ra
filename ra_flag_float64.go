@@ -91,7 +91,7 @@ func (f *Float64Flag) RegisterWithPtr(cmd *Cmd, ptr *float64, opts ...RegisterOp
 		opt(regConf)
 	}
 
-	if _, err := cmd.checkForGlobalFlagOverride(f.Name, regConf.global); err != nil {
+	if _, err := cmd.checkForGlobalFlagOverride(f.Name, f.Short, regConf.global); err != nil {
 		return err
 	}
 

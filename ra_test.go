@@ -2934,3 +2934,284 @@ func Test_CustomUsageTypeWithDifferentFlagTypes(t *testing.T) {
 	assert.NotContains(t, usage, "float")
 	assert.NotContains(t, usage, "ints")
 }
+
+func Test_GlobalFlagAndNonGlobalArg_ShortFlags(t *testing.T) {
+	rootCmd := NewCmd("root")
+
+	// Register a global flag with short flag
+	globalFlag, err := NewString("verbose").
+		SetShort("v").
+		SetUsage("Global verbose flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Register a non-global arg with the same short flag
+	nonGlobalArg, err := NewString("version").
+		SetShort("v").
+		SetUsage("Non-global version argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	// Test that non-global arg takes precedence for short flag parsing
+	err = rootCmd.ParseOrError([]string{"-v", "1.2.3"})
+	assert.NoError(t, err)
+	assert.Equal(t, "1.2.3", *nonGlobalArg)
+	assert.Equal(t, "", *globalFlag) // Global flag should remain empty
+
+	// Test with subcommand - global flag short should work there
+	subCmd := NewCmd("sub")
+	subArg, _ := NewString("subarg").Register(subCmd)
+	subInvoked, err := rootCmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	// Parse with subcommand - global flag short should be available
+	err = rootCmd.ParseOrError([]string{"sub", "-v", "debug", "sub-arg-value"})
+	assert.NoError(t, err)
+	assert.True(t, *subInvoked)
+	assert.Equal(t, "debug", *globalFlag)
+	assert.Equal(t, "sub-arg-value", *subArg)
+}
+
+func Test_GlobalFlagAndNonGlobalArg_BothNameAndShortConflict(t *testing.T) {
+	rootCmd := NewCmd("root")
+
+	// Register a global flag with both name and short
+	globalFlag, err := NewString("name").
+		SetShort("n").
+		SetUsage("Global name flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Register a non-global arg with the same name and short flag
+	nonGlobalArg, err := NewString("name").
+		SetShort("n").
+		SetUsage("Non-global name argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	// Test that non-global arg takes precedence for both name and short flag
+	err = rootCmd.ParseOrError([]string{"-n", "value1"})
+	assert.NoError(t, err)
+	assert.Equal(t, "value1", *nonGlobalArg)
+	assert.Equal(t, "", *globalFlag)
+
+	// Reset and test with full name
+	rootCmd2 := NewCmd("root")
+	globalFlag2, _ := NewString("name").SetShort("n").Register(rootCmd2, WithGlobal(true))
+	nonGlobalArg2, _ := NewString("name").SetShort("n").Register(rootCmd2)
+
+	err = rootCmd2.ParseOrError([]string{"--name", "value2"})
+	assert.NoError(t, err)
+	assert.Equal(t, "value2", *nonGlobalArg2)
+	assert.Equal(t, "", *globalFlag2)
+}
+
+func Test_UsageGeneration_ShadowedGlobalFlagNotInParentLongHelp(t *testing.T) {
+	rootCmd := NewCmd("root")
+
+	// Register global flag
+	_, err := NewString("verbose").
+		SetShort("v").
+		SetUsage("Global verbose flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Register non-global arg that shadows the global flag's short
+	_, err = NewString("version").
+		SetShort("v").
+		SetUsage("Non-global version argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	// Check long help usage - should show both flags properly
+	longUsage := rootCmd.GenerateUsage(true)
+	t.Logf("Long usage output:\n%s", longUsage)
+
+	// Should show the non-global version argument
+	assert.Contains(t, longUsage, "version")
+	assert.Contains(t, longUsage, "Non-global version argument")
+
+	// Should show the global verbose flag (without short flag)
+	assert.Contains(t, longUsage, "verbose")
+	assert.Contains(t, longUsage, "Global verbose flag")
+	assert.Contains(t, longUsage, "--verbose")        // Should have full name
+	assert.NotContains(t, longUsage, "-v, --verbose") // Should NOT have short flag
+
+	// Should have a Global options section
+	assert.Contains(t, longUsage, "Global options:")
+}
+
+func Test_UsageGeneration_PartiallyShaded_GlobalFlags(t *testing.T) {
+	rootCmd := NewCmd("root")
+
+	// Register multiple global flags
+	_, err := NewString("verbose").
+		SetShort("v").
+		SetUsage("Global verbose flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	_, err = NewBool("debug").
+		SetShort("d").
+		SetUsage("Global debug flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Shadow only one of the global flags
+	_, err = NewString("version").
+		SetShort("v").
+		SetUsage("Non-global version argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	// Check long help usage
+	longUsage := rootCmd.GenerateUsage(true)
+	t.Logf("Long usage with partial shadowing:\n%s", longUsage)
+
+	// Should show the non-shadowed global flag
+	assert.Contains(t, longUsage, "debug")
+	assert.Contains(t, longUsage, "Global debug flag")
+
+	// Should show the non-global version argument
+	assert.Contains(t, longUsage, "version")
+	assert.Contains(t, longUsage, "Non-global version argument")
+
+	// Should show the shadowed global verbose flag (without short flag)
+	assert.Contains(t, longUsage, "verbose")
+	assert.Contains(t, longUsage, "Global verbose flag")
+	assert.Contains(t, longUsage, "--verbose")        // Should have full name
+	assert.NotContains(t, longUsage, "-v, --verbose") // Should NOT have short flag
+
+	// Should have Global options section for the non-shadowed global flag
+	assert.Contains(t, longUsage, "Global options:")
+}
+
+func Test_GlobalFlagShortShadowing_KeepFullNameAvailable(t *testing.T) {
+	rootCmd := NewCmd("root")
+
+	// Register global flag with both full name and short
+	globalFlag, err := NewString("verbose").
+		SetShort("v").
+		SetUsage("Global verbose flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Register non-global flag that uses the same short flag
+	nonGlobalArg, err := NewString("version").
+		SetShort("v").
+		SetUsage("Non-global version argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	// Test that non-global gets the short flag
+	err = rootCmd.ParseOrError([]string{"-v", "1.2.3"})
+	assert.NoError(t, err)
+	assert.Equal(t, "1.2.3", *nonGlobalArg)
+	assert.Equal(t, "", *globalFlag)
+
+	// Test that global flag is still available by full name
+	rootCmd2 := NewCmd("root")
+	globalFlag2, _ := NewString(
+		"verbose",
+	).SetShort("v").
+		SetUsage("Global verbose flag").
+		Register(rootCmd2, WithGlobal(true))
+	nonGlobalArg2, _ := NewString("version").SetShort("v").SetUsage("Non-global version argument").Register(rootCmd2)
+
+	err = rootCmd2.ParseOrError([]string{"--verbose", "debug", "test-version"})
+	assert.NoError(t, err)
+	assert.Equal(t, "debug", *globalFlag2)          // Global flag should work with full name
+	assert.Equal(t, "test-version", *nonGlobalArg2) // Non-global gets positional
+
+	// Check usage - both flags should appear
+	usage := rootCmd2.GenerateUsage(true)
+	t.Logf("Usage with short flag shadowing:\n%s", usage)
+
+	// Should show non-global flag with short
+	assert.Contains(t, usage, "-v, --version")
+	assert.Contains(t, usage, "Non-global version argument")
+
+	// Should show global flag WITHOUT short (only full name)
+	assert.Contains(t, usage, "--verbose")
+	assert.Contains(t, usage, "Global verbose flag")
+	// Should NOT show global flag with short since it's taken
+	assert.NotContains(t, usage, "-v, --verbose")
+}
+
+func Test_GlobalFlagShortShadowing_SubcommandKeepsShort(t *testing.T) {
+	rootCmd := NewCmd("root")
+
+	// Register global flag with short
+	globalFlag, err := NewString("verbose").
+		SetShort("v").
+		SetUsage("Global verbose flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Register non-global flag that shadows the short
+	_, err = NewString("version").
+		SetShort("v").
+		SetUsage("Non-global version argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	// Add subcommand
+	subCmd := NewCmd("sub")
+	subArg, _ := NewString("subarg").Register(subCmd)
+	subInvoked, err := rootCmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	// Test that global flag retains its short in subcommand
+	err = rootCmd.ParseOrError([]string{"sub", "-v", "debug", "sub-value"})
+	assert.NoError(t, err)
+	assert.True(t, *subInvoked)
+	assert.Equal(t, "debug", *globalFlag)
+	assert.Equal(t, "sub-value", *subArg)
+
+	// Check subcommand usage - global flag should have its short back
+	subUsage := subCmd.GenerateUsage(true)
+	t.Logf("Subcommand usage:\n%s", subUsage)
+
+	// Should show global flag WITH short in subcommand
+	assert.Contains(t, subUsage, "-v, --verbose")
+	assert.Contains(t, subUsage, "Global verbose flag")
+}
+
+func Test_UsageGeneration_NameBasedShadowing(t *testing.T) {
+	rootCmd := NewCmd("root")
+
+	// Register multiple global flags
+	_, err := NewString("name").
+		SetUsage("Global name flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	_, err = NewBool("debug").
+		SetUsage("Global debug flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Shadow one global flag by name (not short)
+	_, err = NewString("name").
+		SetUsage("Non-global name argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	// Check long help usage
+	longUsage := rootCmd.GenerateUsage(true)
+	t.Logf("Long usage with name-based shadowing:\n%s", longUsage)
+
+	// Should show the non-shadowed global flag
+	assert.Contains(t, longUsage, "debug")
+	assert.Contains(t, longUsage, "Global debug flag")
+
+	// Should show the non-global name argument (not the global one)
+	assert.Contains(t, longUsage, "--name str")
+	assert.Contains(t, longUsage, "Non-global name argument")
+
+	// Should NOT show "Global name flag" text
+	assert.NotContains(t, longUsage, "Global name flag")
+
+	// Should have Global options section for the non-shadowed global flag
+	assert.Contains(t, longUsage, "Global options:")
+}

@@ -94,7 +94,7 @@ func (f *StringFlag) RegisterWithPtr(cmd *Cmd, ptr *string, opts ...RegisterOpti
 		opt(regConf)
 	}
 
-	if _, err := cmd.checkForGlobalFlagOverride(f.Name, regConf.global); err != nil {
+	if _, err := cmd.checkForGlobalFlagOverride(f.Name, f.Short, regConf.global); err != nil {
 		return err
 	}
 

@@ -23,11 +23,12 @@ func DefaultUsageHeaders() UsageHeaders {
 type Cmd struct {
 	name                  string
 	description           string
-	flags                 map[string]any // flag name -> flag itself (either a Flag[T] or SliceFlag[T])
-	positional            []string       // positional flags, i.e. flags that are positional args
-	nonPositional         []string       // non-positional flags, i.e. flags that are only named
-	globalFlags           []string       // flags that will be applied to all subcommands
-	overriddenGlobalFlags map[string]any // global flags that were overridden by non-global flags
+	flags                 map[string]any  // flag name -> flag itself (either a Flag[T] or SliceFlag[T])
+	positional            []string        // positional flags, i.e. flags that are positional args
+	nonPositional         []string        // non-positional flags, i.e. flags that are only named
+	globalFlags           []string        // flags that will be applied to all subcommands
+	overriddenGlobalFlags map[string]any  // global flags that were overridden by non-global flags (name collisions)
+	shadowedShortFlags    map[string]bool // global flags that lost their short flag to non-global flags (short collisions)
 	subCmds               map[string]*Cmd
 	shortToName           map[string]string // short flag -> full name mapping
 
@@ -52,6 +53,7 @@ func NewCmd(name string) *Cmd {
 		flags:                 make(map[string]any),
 		positional:            []string{},
 		overriddenGlobalFlags: make(map[string]any),
+		shadowedShortFlags:    make(map[string]bool),
 		subCmds:               make(map[string]*Cmd),
 		configured:            make(map[string]bool),
 		helpEnabled:           true,
@@ -99,9 +101,20 @@ func (c *Cmd) getUsageHeaders() UsageHeaders {
 }
 
 func (c *Cmd) applyGlobalFlags(subCmd *Cmd) error {
-	// Apply regular global flags
+	// Apply global flags
 	for _, globalFlagName := range c.globalFlags {
-		if flag, exists := c.flags[globalFlagName]; exists {
+		var flag any
+		var exists bool
+
+		// Check if we have an overridden version (original with short intact)
+		if overriddenFlag, overriddenExists := c.overriddenGlobalFlags[globalFlagName]; overriddenExists {
+			flag = overriddenFlag
+			exists = true
+		} else {
+			flag, exists = c.flags[globalFlagName]
+		}
+
+		if exists {
 			// Only add flag if it doesn't already exist in subcommand
 			if _, exists := subCmd.flags[globalFlagName]; !exists {
 				subCmd.flags[globalFlagName] = flag
@@ -112,20 +125,6 @@ func (c *Cmd) applyGlobalFlags(subCmd *Cmd) error {
 				subCmd.globalFlags = append(subCmd.globalFlags, globalFlagName)
 				subCmd.nonPositional = append(subCmd.nonPositional, globalFlagName)
 			}
-		}
-	}
-
-	// Apply overridden global flags
-	for flagName, flag := range c.overriddenGlobalFlags {
-		// Only add flag if it doesn't already exist in subcommand
-		if _, exists := subCmd.flags[flagName]; !exists {
-			subCmd.flags[flagName] = flag
-			if base := getBaseFlag(flag); base != nil && base.Short != "" {
-				subCmd.shortToName[base.Short] = base.Name
-			}
-			// Also add to subcommand's global flags list and non-positional list
-			subCmd.globalFlags = append(subCmd.globalFlags, flagName)
-			subCmd.nonPositional = append(subCmd.nonPositional, flagName)
 		}
 	}
 
@@ -205,7 +204,8 @@ func (c *Cmd) validatePositionalOnlyAfterVariadic(flagName string) error {
 
 // checkForGlobalFlagOverride checks if a non-global flag can override an existing global flag.
 // Returns true if the override is allowed, false if not allowed.
-func (c *Cmd) checkForGlobalFlagOverride(flagName string, isGlobal bool) (bool, error) {
+func (c *Cmd) checkForGlobalFlagOverride(flagName string, flagShort string, isGlobal bool) (bool, error) {
+	// Check for name collision
 	if existingFlag, exists := c.flags[flagName]; exists {
 		// Allow non-global flag to override global flag
 		if !isGlobal {
@@ -221,13 +221,13 @@ func (c *Cmd) checkForGlobalFlagOverride(flagName string, isGlobal bool) (bool, 
 				// Store the global flag for subcommands
 				c.overriddenGlobalFlags[flagName] = existingFlag
 
-				// Remove from globalFlags list (fixes usage generation)
-				for i, globalFlagName := range c.globalFlags {
-					if globalFlagName == flagName {
-						c.globalFlags = append(c.globalFlags[:i], c.globalFlags[i+1:]...)
-						break
-					}
+				// Remove short flag mapping if it exists
+				if base := getBaseFlag(existingFlag); base != nil && base.Short != "" {
+					delete(c.shortToName, base.Short)
 				}
+
+				// Keep the flag in globalFlags list so it can be applied to subcommands
+				// (The usage generation will be fixed by the override logic)
 
 				// Remove from positional/non-positional lists so we can re-add the non-global version
 				for i, name := range c.positional {
@@ -250,5 +250,45 @@ func (c *Cmd) checkForGlobalFlagOverride(flagName string, isGlobal bool) (bool, 
 			return false, fmt.Errorf("flag %q already defined", flagName)
 		}
 	}
+
+	// Check for short flag collision if we have a short flag
+	if flagShort != "" && !isGlobal {
+		if existingFlagName, exists := c.shortToName[flagShort]; exists {
+			// Check if the existing flag with this short is global
+			isExistingGlobal := false
+			for _, globalFlagName := range c.globalFlags {
+				if globalFlagName == existingFlagName {
+					isExistingGlobal = true
+					break
+				}
+			}
+			if isExistingGlobal {
+				// For short flag collisions, we need to keep the global flag as global
+				// but remove its short flag from the parent command
+
+				// Store the original global flag (with short) for subcommands
+				existingFlag := c.flags[existingFlagName]
+				c.overriddenGlobalFlags[existingFlagName] = existingFlag
+
+				// Track that this global flag had its short shadowed
+				c.shadowedShortFlags[existingFlagName] = true
+
+				// Remove the short flag mapping - global flag will only be available by full name
+				delete(c.shortToName, flagShort)
+
+				// Create a copy of the global flag without the short for the parent command
+				flagCopy := deepCopyFlag(existingFlag)
+				if base := getBaseFlag(flagCopy); base != nil {
+					base.Short = "" // Remove short flag from the parent command's copy
+				}
+				c.flags[existingFlagName] = flagCopy
+
+				return true, nil
+			} else {
+				return false, fmt.Errorf("short flag %q already defined", flagShort)
+			}
+		}
+	}
+
 	return false, nil
 }

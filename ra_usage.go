@@ -63,6 +63,19 @@ func (c *Cmd) generateUsage(isLongHelp bool) string {
 				break
 			}
 		}
+
+		// Handle different types of global flag overrides
+		if _, wasOverridden := c.overriddenGlobalFlags[name]; wasOverridden {
+			// Check if this was a short flag collision (should remain global) vs name collision (becomes script)
+			if _, hadShortShadowed := c.shadowedShortFlags[name]; hadShortShadowed {
+				// Short flag collision - keep as global flag (it just lost its short)
+				// isGlobal remains true
+			} else {
+				// Name collision - treat as script flag
+				isGlobal = false
+			}
+		}
+
 		if isGlobal {
 			globalFlags = append(globalFlags, flag)
 		} else {
@@ -85,6 +98,19 @@ func (c *Cmd) generateUsage(isLongHelp bool) string {
 				break
 			}
 		}
+
+		// Handle different types of global flag overrides
+		if _, wasOverridden := c.overriddenGlobalFlags[name]; wasOverridden {
+			// Check if this was a short flag collision (should remain global) vs name collision (becomes script)
+			if _, hadShortShadowed := c.shadowedShortFlags[name]; hadShortShadowed {
+				// Short flag collision - keep as global flag (it just lost its short)
+				// isGlobal remains true
+			} else {
+				// Name collision - treat as script flag
+				isGlobal = false
+			}
+		}
+
 		if isGlobal {
 			globalFlags = append(globalFlags, flag)
 		} else {

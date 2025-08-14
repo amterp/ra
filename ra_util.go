@@ -29,3 +29,39 @@ func getBaseFlag(flag any) *BaseFlag {
 	}
 	return nil
 }
+
+func deepCopyFlag(flag any) any {
+	switch f := flag.(type) {
+	case *BoolFlag:
+		copy := *f
+		return &copy
+	case *StringFlag:
+		copy := *f
+		return &copy
+	case *IntFlag:
+		copy := *f
+		return &copy
+	case *Int64Flag:
+		copy := *f
+		return &copy
+	case *Float64Flag:
+		copy := *f
+		return &copy
+	case *StringSliceFlag:
+		copy := *f
+		return &copy
+	case *IntSliceFlag:
+		copy := *f
+		return &copy
+	case *Int64SliceFlag:
+		copy := *f
+		return &copy
+	case *Float64SliceFlag:
+		copy := *f
+		return &copy
+	case *BoolSliceFlag:
+		copy := *f
+		return &copy
+	}
+	return nil
+}

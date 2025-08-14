@@ -2853,3 +2853,84 @@ func Test_UsageGeneration_GlobalFlagOverride_WithSubcommands(t *testing.T) {
 	assert.Contains(t, subUsage, "Arguments:")
 	assert.Contains(t, subUsage, "subarg")
 }
+
+func Test_CustomFlagType(t *testing.T) {
+	cmd := NewCmd("test")
+
+	// Test custom type override for string flag
+	_, err := NewString("input").
+		SetUsage("Input file path").
+		SetCustomUsageType("file").
+		Register(cmd)
+	assert.NoError(t, err)
+
+	// Test custom type override for variadic slice flag
+	_, err = NewStringSlice("tags").
+		SetUsage("List of tags").
+		SetVariadic(true).
+		SetCustomUsageType("tag...").
+		Register(cmd)
+	assert.NoError(t, err)
+
+	usage := cmd.GenerateUsage(false)
+	t.Logf("Usage with custom types:\n%s", usage)
+
+	// Should show custom type instead of default "str"
+	assert.Contains(t, usage, "--input file")
+	assert.NotContains(t, usage, "--input str")
+
+	// Should show custom type instead of default "[strs...]"
+	assert.Contains(t, usage, "--tags tag...")
+	assert.NotContains(t, usage, "--tags [strs...]")
+}
+
+func Test_VariadicFlagsAlwaysOptional(t *testing.T) {
+	cmd := NewCmd("test")
+
+	// Create a variadic flag without explicitly setting it as optional
+	_, err := NewStringSlice("items").
+		SetUsage("List of items").
+		SetVariadic(true).
+		Register(cmd)
+	assert.NoError(t, err)
+
+	usage := cmd.GenerateUsage(false)
+	t.Logf("Variadic flag usage:\n%s", usage)
+
+	// Variadic flags should always show with brackets (indicating optional)
+	assert.Contains(t, usage, "--items [strs...]")
+	// Should not show without brackets
+	assert.NotContains(t, usage, "--items strs...")
+}
+
+func Test_CustomUsageTypeWithDifferentFlagTypes(t *testing.T) {
+	cmd := NewCmd("test")
+
+	// Test different flag types with custom types
+	_, err := NewBool("enable").SetCustomUsageType("on/off").Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewInt("count").SetCustomUsageType("num").Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewFloat64("rate").SetCustomUsageType("percentage").Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewIntSlice("ports").SetCustomUsageType("port-list").Register(cmd)
+	assert.NoError(t, err)
+
+	usage := cmd.GenerateUsage(false)
+	t.Logf("All custom types usage:\n%s", usage)
+
+	// Verify all custom types appear
+	assert.Contains(t, usage, "--enable on/off")
+	assert.Contains(t, usage, "--count num")
+	assert.Contains(t, usage, "--rate percentage")
+	assert.Contains(t, usage, "--ports port-list")
+
+	// Verify default types don't appear
+	assert.NotContains(t, usage, "bool")
+	assert.NotContains(t, usage, "int")
+	assert.NotContains(t, usage, "float")
+	assert.NotContains(t, usage, "ints")
+}

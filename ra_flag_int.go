@@ -76,6 +76,11 @@ func (f *IntFlag) SetMax(max int, inclusive bool) *IntFlag {
 	return f
 }
 
+func (f *IntFlag) SetCustomUsageType(customType string) *IntFlag {
+	f.CustomUsageType = customType
+	return f
+}
+
 func (f *IntFlag) Register(cmd *Cmd, opts ...RegisterOption) (*int, error) {
 	ptr := new(int)
 	return ptr, f.RegisterWithPtr(cmd, ptr, opts...)

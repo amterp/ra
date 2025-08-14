@@ -95,6 +95,11 @@ func (f *SliceFlag[T]) SetVariadic(b bool) *SliceFlag[T] {
 	return f
 }
 
+func (f *SliceFlag[T]) SetCustomUsageType(customType string) *SliceFlag[T] {
+	f.CustomUsageType = customType
+	return f
+}
+
 func (f *SliceFlag[T]) Register(cmd *Cmd, opts ...RegisterOption) (*[]T, error) {
 	ptr := new([]T)
 	return ptr, f.RegisterWithPtr(cmd, ptr, opts...)

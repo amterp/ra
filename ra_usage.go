@@ -446,6 +446,11 @@ func (c *Cmd) formatFlags(flags []any, isLongHelp bool) string {
 	return sb.String()
 }
 func getFlagType(flag any) string {
+	// Check for custom type override first
+	if base := getBaseFlag(flag); base != nil && base.CustomUsageType != "" {
+		return base.CustomUsageType
+	}
+
 	switch f := flag.(type) {
 	case *BoolFlag:
 		return "bool"
@@ -461,38 +466,22 @@ func getFlagType(flag any) string {
 		return "bool"
 	case *StringSliceFlag:
 		if f.Variadic {
-			base := getBaseFlag(flag)
-			if base.Optional {
-				return "[strs...]"
-			}
-			return "strs..."
+			return "[strs...]"
 		}
 		return "strs"
 	case *IntSliceFlag:
 		if f.Variadic {
-			base := getBaseFlag(flag)
-			if base.Optional {
-				return "[ints...]"
-			}
-			return "ints..."
+			return "[ints...]"
 		}
 		return "ints"
 	case *Int64SliceFlag:
 		if f.Variadic {
-			base := getBaseFlag(flag)
-			if base.Optional {
-				return "[int64s...]"
-			}
-			return "int64s..."
+			return "[int64s...]"
 		}
 		return "int64s"
 	case *Float64SliceFlag:
 		if f.Variadic {
-			base := getBaseFlag(flag)
-			if base.Optional {
-				return "[floats...]"
-			}
-			return "floats..."
+			return "[floats...]"
 		}
 		return "floats"
 	}

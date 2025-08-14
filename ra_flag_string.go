@@ -78,6 +78,11 @@ func (f *StringFlag) SetRegexConstraint(regex *regexp.Regexp) *StringFlag {
 	return f
 }
 
+func (f *StringFlag) SetCustomUsageType(customType string) *StringFlag {
+	f.CustomUsageType = customType
+	return f
+}
+
 func (f *StringFlag) Register(cmd *Cmd, opts ...RegisterOption) (*string, error) {
 	ptr := new(string)
 	return ptr, f.RegisterWithPtr(cmd, ptr, opts...)

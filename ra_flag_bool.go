@@ -60,6 +60,11 @@ func (f *BoolFlag) SetRequires(flags []string) *BoolFlag {
 	return f
 }
 
+func (f *BoolFlag) SetCustomUsageType(customType string) *BoolFlag {
+	f.CustomUsageType = customType
+	return f
+}
+
 func (f *BoolFlag) Register(cmd *Cmd, opts ...RegisterOption) (*bool, error) {
 	ptr := new(bool)
 	return ptr, f.RegisterWithPtr(cmd, ptr, opts...)

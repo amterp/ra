@@ -839,7 +839,7 @@ Usage:
 
 Arguments:
   files [strs...]           Input files
-      --tags strs...        Resource tags
+      --tags [strs...]      Resource tags
       --include [strs...]   Include patterns
       --ports ints          Port numbers Separator: ","
 `
@@ -976,9 +976,9 @@ Usage:
   test <first> [variadic...] [OPTIONS]
 
 Arguments:
-      --first str          First arg
-      --variadic strs...   Variadic arg
-      --after str          After variadic`
+      --first str            First arg
+      --variadic [strs...]   Variadic arg
+      --after str            After variadic`
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
 }

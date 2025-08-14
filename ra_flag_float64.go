@@ -75,6 +75,11 @@ func (f *Float64Flag) SetMax(max float64, inclusive bool) *Float64Flag {
 	return f
 }
 
+func (f *Float64Flag) SetCustomUsageType(customType string) *Float64Flag {
+	f.CustomUsageType = customType
+	return f
+}
+
 func (f *Float64Flag) Register(cmd *Cmd, opts ...RegisterOption) (*float64, error) {
 	ptr := new(float64)
 	return ptr, f.RegisterWithPtr(cmd, ptr, opts...)

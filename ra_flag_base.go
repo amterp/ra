@@ -4,6 +4,7 @@ type BaseFlag struct {
 	Name              string    // Primary identifier for the flag
 	Short             string    // Single character short flag (e.g., 'v' for -v)
 	Usage             string    // Help text description shown in usage
+	CustomUsageType   string    // Custom type string for usage display (overrides auto-detection)
 	Optional          bool      // Whether the flag is optional (default: required)
 	Hidden            bool      // Hide from all help output
 	HiddenInShortHelp bool      // Hide from short help (-h), show in long help (--help)

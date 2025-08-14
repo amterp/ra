@@ -71,8 +71,8 @@ func (f *BoolFlag) RegisterWithPtr(cmd *Cmd, ptr *bool, opts ...RegisterOption) 
 		opt(regConf)
 	}
 
-	if _, exists := cmd.flags[f.Name]; exists {
-		return fmt.Errorf("flag %q already defined", f.Name)
+	if _, err := cmd.checkForGlobalFlagOverride(f.Name, regConf.global); err != nil {
+		return err
 	}
 
 	if regConf.global {

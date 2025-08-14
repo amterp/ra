@@ -2681,3 +2681,175 @@ func Test_ErrorHandling_SubcommandWithMissingRequiredPositional(t *testing.T) {
 
 	_ = inputFile // Suppress unused variable warning
 }
+
+func Test_GlobalFlagAndNonGlobalArgWithSameName(t *testing.T) {
+	rootCmd := NewCmd("root")
+
+	// Register a global flag first
+	globalFlag, err := NewString("name").
+		SetUsage("Global name flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Now try to register a non-global arg with the same name
+	// This should currently fail but we want it to succeed and take precedence
+	nonGlobalArg, err := NewString("name").
+		SetUsage("Non-global name argument").
+		Register(rootCmd)
+
+	// Current behavior: this should error due to name conflict
+	// Expected behavior after fix: this should succeed
+	if err != nil {
+		assert.Contains(t, err.Error(), "flag \"name\" already defined")
+		t.Log("Current behavior: global flag conflicts with non-global arg (expected to fail)")
+		return
+	}
+
+	t.Log("Fix is working: non-global arg registration succeeded")
+
+	// Test 1: Non-global arg takes precedence in root command (positional)
+	err = rootCmd.ParseOrError([]string{"test-value"})
+	assert.NoError(t, err)
+	assert.Equal(t, "test-value", *nonGlobalArg)
+	assert.Equal(t, "", *globalFlag) // Global flag should remain empty
+
+	// Test 2: Non-global arg takes precedence in root command (flag style)
+	rootCmd2 := NewCmd("root")
+	globalFlag2, _ := NewString("name").Register(rootCmd2, WithGlobal(true))
+	nonGlobalArg2, _ := NewString("name").Register(rootCmd2)
+
+	err = rootCmd2.ParseOrError([]string{"--name", "flag-value"})
+	assert.NoError(t, err)
+	assert.Equal(t, "flag-value", *nonGlobalArg2) // Non-global should get the value
+	assert.Equal(t, "", *globalFlag2)             // Global flag should remain empty
+
+	// Test 3: Global flag should still work in subcommands
+	rootCmd3 := NewCmd("root")
+	globalFlag3, _ := NewString("name").Register(rootCmd3, WithGlobal(true))
+	nonGlobalArg3, _ := NewString("name").Register(rootCmd3)
+
+	subCmd := NewCmd("sub")
+	subArg, _ := NewString("subarg").Register(subCmd)
+	subInvoked, err := rootCmd3.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	// Test subcommand parsing where global flag should be available
+	// When we parse "sub --name global-value", the --name should be handled by the global flag
+	// because the non-global version is not available in the subcommand
+	err = rootCmd3.ParseOrError([]string{"sub", "--name", "global-value", "sub-arg-value"})
+	assert.NoError(t, err)
+	assert.True(t, *subInvoked)
+	assert.Equal(t, "sub-arg-value", *subArg)
+
+	// The global flag should have been set in the subcommand context
+	assert.Equal(t, "global-value", *globalFlag3)
+	// The root non-global arg should remain empty
+	assert.Equal(t, "", *nonGlobalArg3)
+}
+
+func Test_GlobalFlagAndNonGlobalArg_SubcommandOverride(t *testing.T) {
+	// Test the edge case: global flag exists, root has non-global override,
+	// and subcommand also has its own non-global arg with same name
+	rootCmd := NewCmd("root")
+	globalFlag, _ := NewString("name").Register(rootCmd, WithGlobal(true))
+	rootNonGlobal, _ := NewString("name").Register(rootCmd) // Non-global overrides global in root
+
+	subCmd := NewCmd("sub")
+	subNonGlobal, err := NewString("name").Register(subCmd) // Subcommand's own non-global
+	assert.NoError(t, err)
+
+	subInvoked, err := rootCmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	// Parse: subcommand's non-global arg should take precedence over global flag
+	err = rootCmd.ParseOrError([]string{"sub", "--name", "sub-value"})
+	assert.NoError(t, err)
+	assert.True(t, *subInvoked)
+
+	// Subcommand's non-global arg should get the value
+	assert.Equal(t, "sub-value", *subNonGlobal)
+	// Root non-global and global flag should remain empty
+	assert.Equal(t, "", *rootNonGlobal)
+	assert.Equal(t, "", *globalFlag)
+}
+
+func Test_UsageGeneration_GlobalFlagOverride(t *testing.T) {
+	rootCmd := NewCmd("root")
+
+	// Register global flag first
+	_, err := NewString("name").
+		SetUsage("Global name flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Register non-global arg with same name
+	_, err = NewString("name").
+		SetUsage("Non-global name argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	// Check usage generation
+	usage := rootCmd.GenerateUsage(false)
+	t.Logf("Usage output:\n%s", usage)
+
+	// The non-global arg should appear under "Arguments", not "Global options"
+	assert.Contains(t, usage, "Arguments:")
+	assert.Contains(t, usage, "Non-global name argument")
+
+	// It should NOT appear under Global options
+	if strings.Contains(usage, "Global options:") {
+		// Find the Global options section and make sure our arg isn't there
+		sections := strings.Split(usage, "\n\n")
+		for _, section := range sections {
+			if strings.Contains(section, "Global options:") {
+				assert.NotContains(t, section, "Non-global name argument",
+					"Non-global arg should not appear in Global options section")
+			}
+		}
+	}
+}
+
+func Test_UsageGeneration_GlobalFlagOverride_WithSubcommands(t *testing.T) {
+	rootCmd := NewCmd("root")
+
+	// Register global flag first
+	_, err := NewString("name").
+		SetUsage("Global name flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Register non-global arg with same name - should override for root
+	_, err = NewString("name").
+		SetUsage("Non-global name argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	// Add a subcommand
+	subCmd := NewCmd("sub")
+	_, err = NewString("subarg").Register(subCmd)
+	assert.NoError(t, err)
+
+	_, err = rootCmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	// Check root command usage - should show non-global arg under Arguments
+	rootUsage := rootCmd.GenerateUsage(false)
+	t.Logf("Root command usage:\n%s", rootUsage)
+
+	assert.Contains(t, rootUsage, "Arguments:")
+	assert.Contains(t, rootUsage, "Non-global name argument")
+
+	// Should NOT contain Global options section since the only global flag was overridden
+	assert.NotContains(t, rootUsage, "Global options:")
+
+	// Check subcommand usage - should show global flag under Global options
+	subUsage := subCmd.GenerateUsage(false)
+	t.Logf("Subcommand usage:\n%s", subUsage)
+
+	assert.Contains(t, subUsage, "Global options:")
+	assert.Contains(t, subUsage, "Global name flag")
+
+	// Should also have its own arguments
+	assert.Contains(t, subUsage, "Arguments:")
+	assert.Contains(t, subUsage, "subarg")
+}

@@ -86,8 +86,8 @@ func (f *Float64Flag) RegisterWithPtr(cmd *Cmd, ptr *float64, opts ...RegisterOp
 		opt(regConf)
 	}
 
-	if _, exists := cmd.flags[f.Name]; exists {
-		return fmt.Errorf("flag %q already defined", f.Name)
+	if _, err := cmd.checkForGlobalFlagOverride(f.Name, regConf.global); err != nil {
+		return err
 	}
 
 	if regConf.global {

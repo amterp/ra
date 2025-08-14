@@ -21,14 +21,15 @@ func DefaultUsageHeaders() UsageHeaders {
 }
 
 type Cmd struct {
-	name          string
-	description   string
-	flags         map[string]any // flag name -> flag itself (either a Flag[T] or SliceFlag[T])
-	positional    []string       // positional flags, i.e. flags that are positional args
-	nonPositional []string       // non-positional flags, i.e. flags that are only named
-	globalFlags   []string       // flags that will be applied to all subcommands
-	subCmds       map[string]*Cmd
-	shortToName   map[string]string // short flag -> full name mapping
+	name                  string
+	description           string
+	flags                 map[string]any // flag name -> flag itself (either a Flag[T] or SliceFlag[T])
+	positional            []string       // positional flags, i.e. flags that are positional args
+	nonPositional         []string       // non-positional flags, i.e. flags that are only named
+	globalFlags           []string       // flags that will be applied to all subcommands
+	overriddenGlobalFlags map[string]any // global flags that were overridden by non-global flags
+	subCmds               map[string]*Cmd
+	shortToName           map[string]string // short flag -> full name mapping
 
 	// options
 	customUsage          func(bool)    // if set, this function will be called to print usage instead of the default
@@ -47,13 +48,14 @@ type Cmd struct {
 
 func NewCmd(name string) *Cmd {
 	c := &Cmd{
-		name:        name,
-		flags:       make(map[string]any),
-		positional:  []string{},
-		subCmds:     make(map[string]*Cmd),
-		configured:  make(map[string]bool),
-		helpEnabled: true,
-		shortToName: make(map[string]string),
+		name:                  name,
+		flags:                 make(map[string]any),
+		positional:            []string{},
+		overriddenGlobalFlags: make(map[string]any),
+		subCmds:               make(map[string]*Cmd),
+		configured:            make(map[string]bool),
+		helpEnabled:           true,
+		shortToName:           make(map[string]string),
 	}
 
 	return c
@@ -97,6 +99,7 @@ func (c *Cmd) getUsageHeaders() UsageHeaders {
 }
 
 func (c *Cmd) applyGlobalFlags(subCmd *Cmd) error {
+	// Apply regular global flags
 	for _, globalFlagName := range c.globalFlags {
 		if flag, exists := c.flags[globalFlagName]; exists {
 			// Only add flag if it doesn't already exist in subcommand
@@ -111,6 +114,21 @@ func (c *Cmd) applyGlobalFlags(subCmd *Cmd) error {
 			}
 		}
 	}
+
+	// Apply overridden global flags
+	for flagName, flag := range c.overriddenGlobalFlags {
+		// Only add flag if it doesn't already exist in subcommand
+		if _, exists := subCmd.flags[flagName]; !exists {
+			subCmd.flags[flagName] = flag
+			if base := getBaseFlag(flag); base != nil && base.Short != "" {
+				subCmd.shortToName[base.Short] = base.Name
+			}
+			// Also add to subcommand's global flags list and non-positional list
+			subCmd.globalFlags = append(subCmd.globalFlags, flagName)
+			subCmd.nonPositional = append(subCmd.nonPositional, flagName)
+		}
+	}
+
 	return nil
 }
 
@@ -183,4 +201,54 @@ func (c *Cmd) validatePositionalOnlyAfterVariadic(flagName string) error {
 		}
 	}
 	return nil
+}
+
+// checkForGlobalFlagOverride checks if a non-global flag can override an existing global flag.
+// Returns true if the override is allowed, false if not allowed.
+func (c *Cmd) checkForGlobalFlagOverride(flagName string, isGlobal bool) (bool, error) {
+	if existingFlag, exists := c.flags[flagName]; exists {
+		// Allow non-global flag to override global flag
+		if !isGlobal {
+			// Check if existing flag is global
+			isExistingGlobal := false
+			for _, globalFlagName := range c.globalFlags {
+				if globalFlagName == flagName {
+					isExistingGlobal = true
+					break
+				}
+			}
+			if isExistingGlobal {
+				// Store the global flag for subcommands
+				c.overriddenGlobalFlags[flagName] = existingFlag
+
+				// Remove from globalFlags list (fixes usage generation)
+				for i, globalFlagName := range c.globalFlags {
+					if globalFlagName == flagName {
+						c.globalFlags = append(c.globalFlags[:i], c.globalFlags[i+1:]...)
+						break
+					}
+				}
+
+				// Remove from positional/non-positional lists so we can re-add the non-global version
+				for i, name := range c.positional {
+					if name == flagName {
+						c.positional = append(c.positional[:i], c.positional[i+1:]...)
+						break
+					}
+				}
+				for i, name := range c.nonPositional {
+					if name == flagName {
+						c.nonPositional = append(c.nonPositional[:i], c.nonPositional[i+1:]...)
+						break
+					}
+				}
+				return true, nil
+			} else {
+				return false, fmt.Errorf("flag %q already defined", flagName)
+			}
+		} else {
+			return false, fmt.Errorf("flag %q already defined", flagName)
+		}
+	}
+	return false, nil
 }

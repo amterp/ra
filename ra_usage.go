@@ -137,12 +137,12 @@ func (c *Cmd) generateUsage(isLongHelp bool) string {
 		}
 	}
 
-	if len(scriptFlags) > 0 {
+	if len(scriptFlags) > 0 && c.hasVisibleFlags(scriptFlags, isLongHelp) {
 		sb.WriteString("\n" + GreenBoldS(headers.Arguments) + "\n")
 		sb.WriteString(c.formatFlags(scriptFlags, isLongHelp))
 	}
 
-	if len(globalFlags) > 0 {
+	if len(globalFlags) > 0 && c.hasVisibleFlags(globalFlags, isLongHelp) {
 		sb.WriteString("\n" + GreenBoldS(headers.GlobalOptions) + "\n")
 		sb.WriteString(c.formatFlags(globalFlags, isLongHelp))
 	}
@@ -363,6 +363,21 @@ func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 
 	sb.WriteString(" " + CyanS("[OPTIONS]"))
 	return sb.String()
+}
+
+func (c *Cmd) hasVisibleFlags(flags []any, isLongHelp bool) bool {
+	for _, flag := range flags {
+		base := getBaseFlag(flag)
+		if base.Hidden {
+			continue
+		}
+		if !isLongHelp && base.HiddenInShortHelp {
+			continue
+		}
+		// Found at least one visible flag
+		return true
+	}
+	return false
 }
 
 func (c *Cmd) formatFlags(flags []any, isLongHelp bool) string {

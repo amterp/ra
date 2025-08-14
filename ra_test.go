@@ -3215,3 +3215,78 @@ func Test_UsageGeneration_NameBasedShadowing(t *testing.T) {
 	// Should have Global options section for the non-shadowed global flag
 	assert.Contains(t, longUsage, "Global options:")
 }
+
+func Test_UsageGeneration_HiddenGlobalFlags_NoGlobalHeader(t *testing.T) {
+	rootCmd := NewCmd("root")
+
+	// Register a hidden global flag
+	_, err := NewString("verbose").
+		SetShort("v").
+		SetUsage("Global verbose flag").
+		SetHidden(true).
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Register another hidden global flag
+	_, err = NewBool("debug").
+		SetShort("d").
+		SetUsage("Global debug flag").
+		SetHidden(true).
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Register a non-global argument for comparison
+	_, err = NewString("name").
+		SetUsage("Non-global name argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	// Check usage generation - should NOT show Global options header
+	usage := rootCmd.GenerateUsage(true)
+	t.Logf("Usage with all global flags hidden:\n%s", usage)
+
+	// Should show the non-global argument
+	assert.Contains(t, usage, "Arguments:")
+	assert.Contains(t, usage, "Non-global name argument")
+
+	// Should NOT show Global options header since all global flags are hidden
+	assert.NotContains(t, usage, "Global options:")
+
+	// Should NOT show the hidden global flags
+	assert.NotContains(t, usage, "verbose")
+	assert.NotContains(t, usage, "debug")
+	assert.NotContains(t, usage, "Global verbose flag")
+	assert.NotContains(t, usage, "Global debug flag")
+}
+
+func Test_UsageGeneration_HiddenScriptFlags_NoArgumentsHeader(t *testing.T) {
+	rootCmd := NewCmd("root")
+
+	// Register a visible global flag
+	_, err := NewString("verbose").
+		SetShort("v").
+		SetUsage("Global verbose flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Register a hidden non-global argument
+	_, err = NewString("name").
+		SetUsage("Hidden name argument").
+		SetHidden(true).
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	// Check usage generation - should NOT show Arguments header
+	usage := rootCmd.GenerateUsage(true)
+	t.Logf("Usage with script flags hidden:\n%s", usage)
+
+	// Should show the global flag
+	assert.Contains(t, usage, "Global options:")
+	assert.Contains(t, usage, "Global verbose flag")
+
+	// Should NOT show Arguments header since all script flags are hidden
+	assert.NotContains(t, usage, "Arguments:")
+
+	// Should NOT show the hidden script flag
+	assert.NotContains(t, usage, "Hidden name argument")
+}

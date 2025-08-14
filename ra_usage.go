@@ -421,19 +421,15 @@ func (c *Cmd) formatFlags(flags []any, isLongHelp bool) string {
 			// For positional-only flags: show (optional) if explicitly optional, otherwise no marker
 			// For other flags: (optional) if explicitly optional AND no default, (required) if required AND no default
 			hasDefault := c.flagHasDefault(flag)
-			var shouldShowOptional, shouldShowRequired bool
+			var shouldShowOptional bool
 			if base.PositionalOnly {
 				shouldShowOptional = base.Optional
-				shouldShowRequired = false
 			} else {
 				shouldShowOptional = base.Optional && !hasDefault
-				shouldShowRequired = !base.Optional && !hasDefault
 			}
 
 			if shouldShowOptional && !isVariadic {
 				sb.WriteString("(optional) ")
-			} else if shouldShowRequired && !isVariadic {
-				sb.WriteString("(required) ")
 			}
 
 			sb.WriteString(base.Usage)

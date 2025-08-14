@@ -136,6 +136,7 @@ func (c *Cmd) Configured(name string) bool {
 func (c *Cmd) GetUnknownArgs() []string {
 	return c.unknownArgs
 }
+
 func (c *Cmd) RegisterCmd(subCmd *Cmd) (*bool, error) {
 	if _, exists := c.subCmds[subCmd.name]; exists {
 		return nil, fmt.Errorf("command %q already defined", subCmd.name)

@@ -331,7 +331,7 @@ Arguments:
   input-file str     Path to input file
   output-dir str     (optional) Output directory
   -f, --format str   Output format Valid values: [json, yaml, xml]. (default json)
-  -j, --jobs int     (required) Number of concurrent jobs Range: [1, 16)
+  -j, --jobs int     Number of concurrent jobs Range: [1, 16)
 `
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
@@ -551,11 +551,11 @@ Usage:
 
 Arguments:
   -p, --port int      Server port Range: [1024, 65535]. (default 8080)
-      --rate float    (required) Processing rate Range: (0, 100]
-      --retries int   (required) Number of retries Range: [0, )
+      --rate float    Processing rate Range: (0, 100]
+      --retries int   Number of retries Range: [0, )
       --format str    Output format Valid values: [json, yaml, xml, csv]. (default json)
-      --name str      (required) Resource name Must match pattern: ^[a-zA-Z][a-zA-Z0-9_-]*$
-      --tags strs     (required) Resource tags Separator: "|". Requires: name
+      --name str      Resource name Must match pattern: ^[a-zA-Z][a-zA-Z0-9_-]*$
+      --tags strs     Resource tags Separator: "|". Requires: name
       --debug         Enable debug mode Excludes: quiet, silent
   -q, --quiet         Suppress output Excludes: debug, verbose
 `
@@ -663,7 +663,7 @@ Usage:
   myapp <config> [OPTIONS]
 
 Arguments:
-      --config str   (required) Configuration file
+      --config str   Configuration file
 `
 
 	assert.Equal(t, strings.TrimSpace(expectedShort), strings.TrimSpace(shortUsage))
@@ -676,8 +676,8 @@ Usage:
   myapp <config> <debug-info> [OPTIONS]
 
 Arguments:
-      --config str       (required) Configuration file
-      --debug-info str   (required) Debug information
+      --config str       Configuration file
+      --debug-info str   Debug information
 `
 
 	assert.Equal(t, strings.TrimSpace(expectedLong), strings.TrimSpace(longUsage))
@@ -725,7 +725,7 @@ Usage:
   sub <input> [OPTIONS]
 
 Arguments:
-      --input str   (required) Input file
+      --input str   Input file
 
 Global options:
   -v, --verbose         Enable verbose output
@@ -781,8 +781,8 @@ Usage:
   ordering <config> <timeout> [OPTIONS]
 
 Arguments:
-      --config str    (required) Config file path
-      --timeout int   (required) Timeout value
+      --config str    Config file path
+      --timeout int   Timeout value
   -v, --verbose       Enable verbose mode
   -f, --force         Force operation
   -q, --quiet         Quiet mode
@@ -841,7 +841,7 @@ Arguments:
   files [strs...]           Input files
       --tags strs...        Resource tags
       --include [strs...]   Include patterns
-      --ports ints          (required) Port numbers Separator: ","
+      --ports ints          Port numbers Separator: ","
 `
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
@@ -914,7 +914,7 @@ Usage:
   complex <mode> [rate] [config-files...] [OPTIONS]
 
 Arguments:
-      --mode str                 (required) Operation mode Must match pattern: ^(dev|prod|test)$
+      --mode str                 Operation mode Must match pattern: ^(dev|prod|test)$
       --rate float               Processing rate Range: (0, 1). (default 0.5)
       --config-files [strs...]   Configuration files Separator: ":". Requires: mode
   -v, --verbose                  Verbose output Requires: mode. Excludes: quiet, silent
@@ -976,9 +976,9 @@ Usage:
   test <first> [variadic...] [OPTIONS]
 
 Arguments:
-      --first str          (required) First arg
+      --first str          First arg
       --variadic strs...   Variadic arg
-      --after str          (required) After variadic`
+      --after str          After variadic`
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
 }
@@ -1017,7 +1017,7 @@ Usage:
   test <required> [with-default] [OPTIONS]
 
 Arguments:
-      --required str       (required) Required flag
+      --required str       Required flag
       --optional str       (optional) Optional flag
       --with-default str   Flag with default (default defaultval)`
 

@@ -195,13 +195,7 @@ Flags display status markers based on their requirement and default status:
 - Positional-only flags explicitly marked optional (important since users can't see flag names)
 - Example: `--include strs    (optional) Include patterns`
 
-**`(required)` marker**:
-- Non-positional flags that are required and have no default value
-- Example: `--name str    (required) Resource name`
-
 **Boolean Flag Defaults**: Boolean flags with implicit or explicit `false` defaults don't show `(default false)` text. However, boolean flags explicitly set to `(default true)` will show this default value.
-
-**Note**: The code currently defaults flags to optional, but this is incorrect behavior that needs to be fixed. Flags should default to required.
 
 ### Complete Examples
 

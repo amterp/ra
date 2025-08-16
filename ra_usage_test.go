@@ -1258,3 +1258,71 @@ func Test_CustomUsage_RespectsStdoutStderrRouting(t *testing.T) {
 		assert.Empty(t, stderr.String(), "stderr should be empty for help request")
 	})
 }
+
+func Test_DefaultValues_DisplayWithoutUsageText(t *testing.T) {
+	cmd := NewCmd("myapp")
+	cmd.SetDescription("Test default values display without usage text")
+
+	// Flags with defaults but no usage text - these should still show default values
+	_, err := NewString("stringArg").
+		SetDefault("alice").
+		Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewInt64("intArg").
+		SetUsage("An int."). // This one has usage text, should show default
+		SetDefault(1).
+		Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewFloat64("floatArg").
+		SetDefault(1.1).
+		Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewBool("boolArg").
+		SetDefault(true).
+		Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewStringSlice("stringListArg").
+		SetDefault([]string{"bob", "charlie"}).
+		Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewIntSlice("intListArg").
+		SetDefault([]int{2, 3}).
+		Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewFloat64Slice("floatListArg").
+		SetDefault([]float64{2.1, 3.1}).
+		Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewBoolSlice("boolListArg").
+		SetDefault([]bool{true, false}).
+		Register(cmd)
+	assert.NoError(t, err)
+
+	usage := cmd.GenerateUsage(false)
+
+	// All flags should show their default values, even without usage text
+	expected := `Test default values display without usage text
+
+Usage:
+  myapp [stringArg] [intArg] [floatArg] [stringListArg] [intListArg] [floatListArg] [OPTIONS]
+
+Arguments:
+      --stringArg str         (default alice)
+      --intArg int64          An int. (default 1)
+      --floatArg float        (default 1.1)
+      --stringListArg strs    (default [bob, charlie])
+      --intListArg ints       (default [2, 3])
+      --floatListArg floats   (default [2.1, 3.1])
+      --boolListArg           (default [true, false])
+      --boolArg               (default true)
+`
+
+	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
+}

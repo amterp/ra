@@ -434,7 +434,12 @@ func (c *Cmd) formatFlags(flags []any, isLongHelp bool) string {
 		base := getBaseFlag(flag)
 		sb.WriteString(flagPart)
 
-		if base.Usage != "" {
+		// Check if we have usage text or constraints to display
+		hasUsage := base.Usage != ""
+		constraints := c.getConstraintString(flag)
+		hasConstraints := constraints != ""
+
+		if hasUsage || hasConstraints {
 			// Calculate padding to align descriptions
 			padding := maxWidth - len(flagPart)
 			if padding < 1 {
@@ -473,12 +478,16 @@ func (c *Cmd) formatFlags(flags []any, isLongHelp bool) string {
 				sb.WriteString("(optional) ")
 			}
 
-			sb.WriteString(base.Usage)
+			// Add usage text if it exists
+			if hasUsage {
+				sb.WriteString(base.Usage)
+			}
 
-			// Add constraints
-			constraints := c.getConstraintString(flag)
-			if constraints != "" {
-				sb.WriteString(" ")
+			// Add constraints (including defaults)
+			if hasConstraints {
+				if hasUsage {
+					sb.WriteString(" ")
+				}
 				sb.WriteString(constraints)
 			}
 		}

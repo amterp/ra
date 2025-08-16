@@ -1351,3 +1351,36 @@ Arguments:
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
 }
+
+func Test_CustomUsageType_DoesNotAffectSynopsisLogic(t *testing.T) {
+	cmd := NewCmd("test")
+	cmd.SetDescription("Test that CustomUsageType only affects display, not synopsis logic")
+
+	// BoolFlag with custom type - should still be excluded from synopsis (logic unchanged)
+	_, err := NewBool("verbose").
+		SetUsage("Enable verbose output").
+		SetCustomUsageType("toggle").
+		Register(cmd)
+	assert.NoError(t, err)
+
+	// StringFlag with "bool" custom type - should still appear in synopsis (logic unchanged)
+	_, err = NewString("mode").
+		SetUsage("Operation mode").
+		SetCustomUsageType("bool").
+		Register(cmd)
+	assert.NoError(t, err)
+
+	usage := cmd.GenerateUsage(false)
+
+	expected := `Test that CustomUsageType only affects display, not synopsis logic
+
+Usage:
+  test <mode> [OPTIONS]
+
+Arguments:
+      --mode             Operation mode
+      --verbose toggle   Enable verbose output
+`
+
+	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
+}

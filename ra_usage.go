@@ -168,8 +168,7 @@ func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 			}
 
 			// Show positional-only flags or non-bool flags in synopsis (bools never appear)
-			flagType := getFlagType(flag)
-			if base.PositionalOnly || flagType != "bool" {
+			if base.PositionalOnly || !isBoolFlag(flag) {
 				var argName string
 
 				// Check if it's a variadic slice
@@ -221,8 +220,7 @@ func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 			continue
 		}
 
-		flagType := getFlagType(flag)
-		if flagType == "bool" {
+		if isBoolFlag(flag) {
 			continue // Bools never appear in synopsis
 		}
 
@@ -258,8 +256,7 @@ func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 			continue
 		}
 
-		flagType := getFlagType(flag)
-		if flagType == "bool" || base.Optional {
+		if isBoolFlag(flag) || base.Optional {
 			continue // Bools and optional flags never appear in synopsis
 		}
 
@@ -495,6 +492,12 @@ func (c *Cmd) formatFlags(flags []any, isLongHelp bool) string {
 	}
 	return sb.String()
 }
+
+func isBoolFlag(flag any) bool {
+	_, ok := flag.(*BoolFlag)
+	return ok
+}
+
 func getFlagType(flag any) string {
 	// Check for custom type override first
 	if base := getBaseFlag(flag); base != nil && base.CustomUsageType != "" {

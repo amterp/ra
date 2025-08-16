@@ -13,8 +13,9 @@ var HelpInvokedErr = errors.New("help invoked")
 
 // Internal error wrapper to carry exit code for ParseOrExit
 type helpInvokedError struct {
-	output   string // The usage text that was/would be output
-	exitCode int    // The exit code (0 for help, 1 for error)
+	output    string // The usage text that was/would be output
+	exitCode  int    // The exit code (0 for help, 1 for error)
+	useStdout bool   // Whether to output to stdout (true for help requests) or stderr (false for errors)
 }
 
 func (e *helpInvokedError) Error() string {
@@ -30,8 +31,12 @@ func (c *Cmd) ParseOrExit(args []string, opts ...ParseOpt) {
 	if err != nil {
 		// Check if this is a help invoked error
 		if helpErr, ok := err.(*helpInvokedError); ok {
-			// Usage was already output, just exit with the appropriate code
-			fmt.Fprint(stderrWriter, helpErr.output)
+			// Route output to stdout for help requests, stderr for errors
+			if helpErr.useStdout {
+				fmt.Fprint(stdoutWriter, helpErr.output)
+			} else {
+				fmt.Fprint(stderrWriter, helpErr.output)
+			}
 			osExit(helpErr.exitCode)
 		} else {
 			// Regular error - show error message and usage
@@ -99,7 +104,7 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 				} else {
 					output = c.GenerateLongUsage()
 				}
-				return &helpInvokedError{output: output, exitCode: 0}
+				return &helpInvokedError{output: output, exitCode: 0, useStdout: true}
 			}
 			if arg == "-h" {
 				var output string
@@ -109,7 +114,7 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 				} else {
 					output = c.GenerateShortUsage()
 				}
-				return &helpInvokedError{output: output, exitCode: 0}
+				return &helpInvokedError{output: output, exitCode: 0, useStdout: true}
 			}
 		}
 	}
@@ -123,7 +128,7 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 		} else {
 			output = c.GenerateShortUsage()
 		}
-		return &helpInvokedError{output: output, exitCode: 0}
+		return &helpInvokedError{output: output, exitCode: 0, useStdout: true}
 	}
 
 	// Check if we have number shorts mode

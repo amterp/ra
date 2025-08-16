@@ -1115,3 +1115,146 @@ func Test_BoolFlag_MixedDefaults(t *testing.T) {
 	assert.Contains(t, usage, "Defaults to false")
 	assert.Contains(t, usage, "Implicitly false")
 }
+
+func Test_ExplicitHelpFlags_OutputToStdout(t *testing.T) {
+	// Test --help flag
+	t.Run("--help outputs to stdout", func(t *testing.T) {
+		cleanup, exitCode, stdout, stderr := mockExit(t)
+		defer cleanup()
+
+		assert.Panics(t, func() {
+			cmd := NewCmd("test")
+			cmd.ParseOrExit([]string{"--help"})
+		})
+
+		assert.Equal(t, 0, *exitCode, "should exit with code 0 for help")
+		assert.Contains(t, stdout.String(), "Usage:", "help output should go to stdout")
+		assert.Empty(t, stderr.String(), "stderr should be empty for help request")
+	})
+
+	// Test -h flag
+	t.Run("-h outputs to stdout", func(t *testing.T) {
+		cleanup, exitCode, stdout, stderr := mockExit(t)
+		defer cleanup()
+
+		assert.Panics(t, func() {
+			cmd := NewCmd("test")
+			cmd.ParseOrExit([]string{"-h"})
+		})
+
+		assert.Equal(t, 0, *exitCode, "should exit with code 0 for help")
+		assert.Contains(t, stdout.String(), "Usage:", "help output should go to stdout")
+		assert.Empty(t, stderr.String(), "stderr should be empty for help request")
+	})
+}
+
+func Test_AutoHelp_OutputToStdout(t *testing.T) {
+	cleanup, exitCode, stdout, stderr := mockExit(t)
+	defer cleanup()
+
+	cmd := NewCmd("test")
+	cmd.SetAutoHelpOnNoArgs(true)
+
+	// Add a required flag to trigger auto-help
+	_, err := NewString("required-flag").Register(cmd)
+	assert.NoError(t, err)
+
+	// Call with no args - should trigger auto-help
+	assert.Panics(t, func() {
+		cmd.ParseOrExit([]string{})
+	})
+
+	assert.Equal(t, 0, *exitCode, "should exit with code 0 for auto-help")
+	assert.Contains(t, stdout.String(), "Usage:", "auto-help output should go to stdout")
+	assert.Contains(t, stdout.String(), "required-flag", "should show required flag")
+	assert.Empty(t, stderr.String(), "stderr should be empty for auto-help")
+}
+
+func Test_ErrorTriggeredUsage_OutputToStderr(t *testing.T) {
+	cleanup, exitCode, stdout, stderr := mockExit(t)
+	defer cleanup()
+
+	cmd := NewCmd("test")
+
+	// Add a required flag
+	_, err := NewString("required-flag").Register(cmd)
+	assert.NoError(t, err)
+
+	// Call with no args and auto-help disabled - should trigger error
+	assert.Panics(t, func() {
+		cmd.ParseOrExit([]string{})
+	})
+
+	assert.Equal(t, 1, *exitCode, "should exit with code 1 for error")
+	assert.Empty(t, stdout.String(), "stdout should be empty for error")
+	assert.Contains(t, stderr.String(), "Missing required arguments", "error message should go to stderr")
+	assert.Contains(t, stderr.String(), "Usage:", "error-triggered usage should go to stderr")
+}
+
+func Test_CustomUsage_RespectsStdoutStderrRouting(t *testing.T) {
+	// Test custom usage with --help (should go to stdout)
+	t.Run("custom usage with --help goes to stdout", func(t *testing.T) {
+		cleanup, exitCode, stdout, stderr := mockExit(t)
+		defer cleanup()
+
+		// Track custom usage calls
+		var customUsageCalled bool
+		var customUsageIsLongHelp bool
+
+		cmd := NewCmd("test")
+		cmd.SetCustomUsage(func(isLongHelp bool) {
+			customUsageCalled = true
+			customUsageIsLongHelp = isLongHelp
+			// Custom usage should write to the same destination as the regular usage would
+			// For help requests, this should still result in stdout output
+			if isLongHelp {
+				stdoutWriter.Write([]byte("Custom long help"))
+			} else {
+				stdoutWriter.Write([]byte("Custom short help"))
+			}
+		})
+
+		assert.Panics(t, func() {
+			cmd.ParseOrExit([]string{"--help"})
+		})
+
+		assert.Equal(t, 0, *exitCode, "should exit with code 0 for help")
+		assert.True(t, customUsageCalled, "should call custom usage function")
+		assert.True(t, customUsageIsLongHelp, "should call custom usage with isLongHelp=true")
+		assert.Contains(t, stdout.String(), "Custom long help", "custom help output should go to stdout")
+		assert.Empty(t, stderr.String(), "stderr should be empty for help request")
+	})
+
+	// Test custom usage with -h (should go to stdout)
+	t.Run("custom usage with -h goes to stdout", func(t *testing.T) {
+		cleanup, exitCode, stdout, stderr := mockExit(t)
+		defer cleanup()
+
+		// Track custom usage calls
+		var customUsageCalled bool
+		var customUsageIsLongHelp bool
+
+		cmd := NewCmd("test")
+		cmd.SetCustomUsage(func(isLongHelp bool) {
+			customUsageCalled = true
+			customUsageIsLongHelp = isLongHelp
+			// Custom usage should write to the same destination as the regular usage would
+			// For help requests, this should still result in stdout output
+			if isLongHelp {
+				stdoutWriter.Write([]byte("Custom long help"))
+			} else {
+				stdoutWriter.Write([]byte("Custom short help"))
+			}
+		})
+
+		assert.Panics(t, func() {
+			cmd.ParseOrExit([]string{"-h"})
+		})
+
+		assert.Equal(t, 0, *exitCode, "should exit with code 0 for help")
+		assert.True(t, customUsageCalled, "should call custom usage function")
+		assert.False(t, customUsageIsLongHelp, "should call custom usage with isLongHelp=false")
+		assert.Contains(t, stdout.String(), "Custom short help", "custom help output should go to stdout")
+		assert.Empty(t, stderr.String(), "stderr should be empty for help request")
+	})
+}

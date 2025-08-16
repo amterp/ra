@@ -963,17 +963,19 @@ func (m *mockExitWriter) Write(p []byte) (int, error) {
 	return m.buffer.Write(p)
 }
 
-// mockExit replaces the osExit function to test for calls to os.Exit.
-func mockExit(t *testing.T) (func(), *int, *bytes.Buffer) {
+// mockExit replaces the osExit function and captures both stdout and stderr output.
+func mockExit(t *testing.T) (func(), *int, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
 	var exitCode int
 	var mu sync.Mutex
-
 	originalExit := osExit
 	originalStderr := stderrWriter
+	originalStdout := stdoutWriter
 
-	mockWriter := &mockExitWriter{}
-	stderrWriter = mockWriter
+	mockStdoutWriter := &mockExitWriter{}
+	mockStderrWriter := &mockExitWriter{}
+	stdoutWriter = mockStdoutWriter
+	stderrWriter = mockStderrWriter
 
 	osExit = func(code int) {
 		mu.Lock()
@@ -983,17 +985,16 @@ func mockExit(t *testing.T) (func(), *int, *bytes.Buffer) {
 		// The deferred function will recover from this.
 		panic("os.Exit called")
 	}
-
 	cleanup := func() {
 		osExit = originalExit
 		stderrWriter = originalStderr
+		stdoutWriter = originalStdout
 	}
-
-	return cleanup, &exitCode, &mockWriter.buffer
+	return cleanup, &exitCode, &mockStdoutWriter.buffer, &mockStderrWriter.buffer
 }
 
 func Test_ParseOrExit_ExitsOnError(t *testing.T) {
-	cleanup, exitCode, stderr := mockExit(t)
+	cleanup, exitCode, _, stderr := mockExit(t)
 	defer cleanup()
 
 	// This will panic because we mocked os.Exit
@@ -1008,7 +1009,7 @@ func Test_ParseOrExit_ExitsOnError(t *testing.T) {
 }
 
 func Test_ParseOrError_ReturnsError(t *testing.T) {
-	cleanup, exitCode, _ := mockExit(t)
+	cleanup, exitCode, _, _ := mockExit(t)
 	defer cleanup()
 
 	var err error
@@ -1023,7 +1024,7 @@ func Test_ParseOrError_ReturnsError(t *testing.T) {
 
 func Test_HelpFlags_Exit(t *testing.T) {
 	// Test --help (long)
-	cleanup, exitCode, _ := mockExit(t)
+	cleanup, exitCode, _, _ := mockExit(t)
 	assert.PanicsWithValue(t, "os.Exit called", func() {
 		fs := NewCmd("test")
 		NewString("my-flag").SetUsage("This is a test flag.").Register(fs)
@@ -1033,7 +1034,7 @@ func Test_HelpFlags_Exit(t *testing.T) {
 	cleanup()
 
 	// Test -h (short)
-	cleanup, exitCode, _ = mockExit(t)
+	cleanup, exitCode, _, _ = mockExit(t)
 	assert.PanicsWithValue(t, "os.Exit called", func() {
 		fs := NewCmd("test")
 		NewString("my-flag").SetUsage("This is a test flag.").Register(fs)
@@ -1044,7 +1045,7 @@ func Test_HelpFlags_Exit(t *testing.T) {
 }
 
 func Test_HiddenInShortHelp(t *testing.T) {
-	cleanup, _, stderr := mockExit(t)
+	cleanup, _, stdout, _ := mockExit(t)
 	defer cleanup()
 
 	assert.Panics(t, func() {
@@ -1054,13 +1055,13 @@ func Test_HiddenInShortHelp(t *testing.T) {
 		fs.ParseOrExit([]string{"-h"})
 	})
 
-	output := stderr.String()
+	output := stdout.String()
 	assert.Contains(t, output, "visible-flag")
 	assert.NotContains(t, output, "hidden-flag")
 }
 
 func Test_ShortHelpVsLongHelp(t *testing.T) {
-	cleanup, _, longStderr := mockExit(t)
+	cleanup, _, longStdout, _ := mockExit(t)
 	assert.Panics(t, func() {
 		fs := NewCmd("test")
 		NewString("visible-flag").Register(fs)
@@ -1069,7 +1070,7 @@ func Test_ShortHelpVsLongHelp(t *testing.T) {
 	})
 	cleanup()
 
-	cleanup, _, shortStderr := mockExit(t)
+	cleanup, _, shortStdout, _ := mockExit(t)
 	assert.Panics(t, func() {
 		fs := NewCmd("test")
 		NewString("visible-flag").Register(fs)
@@ -1080,12 +1081,12 @@ func Test_ShortHelpVsLongHelp(t *testing.T) {
 
 	// Per spec, HiddenInShortHelp flags are shown in long help but not in short help.
 	// Long help should show both visible and advanced flags
-	assert.Contains(t, longStderr.String(), "visible-flag")
-	assert.Contains(t, longStderr.String(), "advanced-flag")
+	assert.Contains(t, longStdout.String(), "visible-flag")
+	assert.Contains(t, longStdout.String(), "advanced-flag")
 
 	// Short help should only show visible flags, not advanced ones
-	assert.Contains(t, shortStderr.String(), "visible-flag")
-	assert.NotContains(t, shortStderr.String(), "advanced-flag")
+	assert.Contains(t, shortStdout.String(), "visible-flag")
+	assert.NotContains(t, shortStdout.String(), "advanced-flag")
 }
 
 func Test_CustomUsage(t *testing.T) {
@@ -1094,15 +1095,15 @@ func Test_CustomUsage(t *testing.T) {
 	customUsageFunc := func(isLongHelp bool) {
 		if isLongHelp {
 			longHelpCalled = true
-			stderrWriter.Write([]byte("Custom long help!"))
+			stdoutWriter.Write([]byte("Custom long help!"))
 		} else {
 			shortHelpCalled = true
-			stderrWriter.Write([]byte("Custom short help!"))
+			stdoutWriter.Write([]byte("Custom short help!"))
 		}
 	}
 
 	// Test long custom help
-	cleanup, _, stderr := mockExit(t)
+	cleanup, _, stdout, _ := mockExit(t)
 	assert.Panics(t, func() {
 		fs := NewCmd("test")
 		fs.SetCustomUsage(customUsageFunc)
@@ -1110,12 +1111,12 @@ func Test_CustomUsage(t *testing.T) {
 	})
 	assert.True(t, longHelpCalled)
 	assert.False(t, shortHelpCalled)
-	assert.Contains(t, stderr.String(), "Custom long help!")
+	assert.Contains(t, stdout.String(), "Custom long help!")
 	cleanup()
 
 	// Reset and test short custom help
 	longHelpCalled, shortHelpCalled = false, false
-	cleanup, _, stderr = mockExit(t)
+	cleanup, _, stdout, _ = mockExit(t)
 	assert.Panics(t, func() {
 		fs := NewCmd("test")
 		fs.SetCustomUsage(customUsageFunc)
@@ -1123,12 +1124,12 @@ func Test_CustomUsage(t *testing.T) {
 	})
 	assert.False(t, longHelpCalled)
 	assert.True(t, shortHelpCalled)
-	assert.Contains(t, stderr.String(), "Custom short help!")
+	assert.Contains(t, stdout.String(), "Custom short help!")
 	cleanup()
 }
 
 func Test_CustomUsageWithDefaultGenerator(t *testing.T) {
-	cleanup, _, stderr := mockExit(t)
+	cleanup, _, stdout, _ := mockExit(t)
 	defer cleanup()
 
 	fs := NewCmd("test")
@@ -1136,11 +1137,11 @@ func Test_CustomUsageWithDefaultGenerator(t *testing.T) {
 	fs.SetCustomUsage(func(isLongHelp bool) {
 		// User captures fs in a closure
 		if isLongHelp {
-			stderrWriter.Write([]byte("--- Custom Header ---\n"))
-			stderrWriter.Write([]byte(fs.GenerateLongUsage()))
-			stderrWriter.Write([]byte("\n--- Custom Footer ---"))
+			stdoutWriter.Write([]byte("--- Custom Header ---\n"))
+			stdoutWriter.Write([]byte(fs.GenerateLongUsage()))
+			stdoutWriter.Write([]byte("\n--- Custom Footer ---"))
 		} else {
-			stderrWriter.Write([]byte(fs.GenerateShortUsage()))
+			stdoutWriter.Write([]byte(fs.GenerateShortUsage()))
 		}
 	})
 
@@ -1148,14 +1149,14 @@ func Test_CustomUsageWithDefaultGenerator(t *testing.T) {
 		fs.ParseOrExit([]string{"--help"})
 	})
 
-	output := stderr.String()
+	output := stdout.String()
 	assert.True(t, strings.HasPrefix(output, "--- Custom Header ---"))
 	assert.True(t, strings.HasSuffix(output, "--- Custom Footer ---"))
 	assert.Contains(t, output, "My flag usage.")
 }
 
 func Test_UsageStringFormat(t *testing.T) {
-	cleanup, _, stderr := mockExit(t)
+	cleanup, _, stdout, _ := mockExit(t)
 	defer cleanup()
 
 	fs := NewCmd("hm")
@@ -1217,14 +1218,14 @@ Global options:
   -h, --help            Print usage string.
 `
 	// Compare the full output as a string
-	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(stderr.String()))
+	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(stdout.String()))
 
 	// --src should now appear in long help (--help) since it's marked HiddenInShortHelp
-	assert.Contains(t, stderr.String(), "--src")
+	assert.Contains(t, stdout.String(), "--src")
 }
 
 func Test_UsageStringFormatWithSubcommands(t *testing.T) {
-	cleanup, _, stderr := mockExit(t)
+	cleanup, _, stdout, _ := mockExit(t)
 	defer cleanup()
 
 	rootCmd := NewCmd("git")
@@ -1259,7 +1260,7 @@ Global options:
   -h, --help         Print usage string.
 `
 	// Compare the full output as a string
-	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(stderr.String()))
+	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(stdout.String()))
 }
 
 func Test_GlobalFlagAfterSubcmdRegistration(t *testing.T) {
@@ -1982,11 +1983,11 @@ func Test_AutoHelpOnNoArgs_RespectsCustomUsage(t *testing.T) {
 }
 
 func Test_ParseOrExit_HandlesHelpInvokedErr(t *testing.T) {
-	// Mock stderr to capture output
+	// Mock stdout to capture output (auto-help now goes to stdout)
 	var capturedOutput bytes.Buffer
-	originalStderrWriter := stderrWriter
-	stderrWriter = &capturedOutput
-	defer func() { stderrWriter = originalStderrWriter }()
+	originalStdoutWriter := stdoutWriter
+	stdoutWriter = &capturedOutput
+	defer func() { stdoutWriter = originalStdoutWriter }()
 
 	// Mock osExit to capture exit code
 	var exitCode int
@@ -2011,7 +2012,7 @@ func Test_ParseOrExit_HandlesHelpInvokedErr(t *testing.T) {
 	assert.True(t, exitCalled, "should have called osExit")
 	assert.Equal(t, 0, exitCode, "should exit with code 0 for help")
 
-	// Should have output the usage text
+	// Should have output the usage text to stdout
 	output := capturedOutput.String()
 	assert.Contains(t, output, "Usage:", "should output usage text")
 	assert.Contains(t, output, "required-flag", "should show required flag")

@@ -513,7 +513,10 @@ func getFlagType(flag any) string {
 	case *Float64Flag:
 		return "float"
 	case *BoolSliceFlag:
-		return "bool"
+		if f.Variadic {
+			return "[bools...]"
+		}
+		return "bools"
 	case *StringSliceFlag:
 		if f.Variadic {
 			return "[strs...]"

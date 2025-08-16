@@ -1311,7 +1311,7 @@ func Test_DefaultValues_DisplayWithoutUsageText(t *testing.T) {
 	expected := `Test default values display without usage text
 
 Usage:
-  myapp [stringArg] [intArg] [floatArg] [stringListArg] [intListArg] [floatListArg] [OPTIONS]
+  myapp [stringArg] [intArg] [floatArg] [stringListArg] [intListArg] [floatListArg] [boolListArg] [OPTIONS]
 
 Arguments:
       --stringArg str         (default alice)
@@ -1320,8 +1320,33 @@ Arguments:
       --stringListArg strs    (default [bob, charlie])
       --intListArg ints       (default [2, 3])
       --floatListArg floats   (default [2.1, 3.1])
-      --boolListArg           (default [true, false])
+      --boolListArg bools     (default [true, false])
       --boolArg               (default true)
+`
+
+	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
+}
+
+func Test_VariadicBoolSliceFlag_Synopsis(t *testing.T) {
+	cmd := NewCmd("test")
+	cmd.SetDescription("Test variadic bool slice flag in synopsis")
+
+	_, err := NewBoolSlice("flags").
+		SetUsage("Boolean flags").
+		SetVariadic(true).
+		Register(cmd)
+	assert.NoError(t, err)
+
+	usage := cmd.GenerateUsage(false)
+
+	// Variadic bool slice should appear in synopsis with [bools...] type
+	expected := `Test variadic bool slice flag in synopsis
+
+Usage:
+  test [flags...] [OPTIONS]
+
+Arguments:
+      --flags [bools...]   Boolean flags
 `
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))

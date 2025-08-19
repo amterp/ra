@@ -29,23 +29,93 @@ func (c *Cmd) GenerateLongUsage() string {
 	return c.generateUsage(true)
 }
 
-func (c *Cmd) generateUsage(isLongHelp bool) string {
+func (c *Cmd) GenerateDescription() string {
+	return c.generateDescription()
+}
+
+func (c *Cmd) GenerateSynopsis(isLongHelp bool) string {
+	return c.generateSynopsis(isLongHelp)
+}
+
+func (c *Cmd) GenerateShortSynopsis() string {
+	return c.generateSynopsis(false)
+}
+
+func (c *Cmd) GenerateLongSynopsis() string {
+	return c.generateSynopsis(true)
+}
+
+func (c *Cmd) GenerateCommandsSection(isLongHelp bool) string {
+	return c.generateCommandsSection(isLongHelp)
+}
+
+func (c *Cmd) GenerateArgumentsSection(isLongHelp bool) string {
+	return c.generateArgumentsSection(isLongHelp)
+}
+
+func (c *Cmd) GenerateGlobalOptionsSection(isLongHelp bool) string {
+	return c.generateGlobalOptionsSection(isLongHelp)
+}
+
+func (c *Cmd) GenerateShortCommandsSection() string {
+	return c.generateCommandsSection(false)
+}
+
+func (c *Cmd) GenerateLongCommandsSection() string {
+	return c.generateCommandsSection(true)
+}
+
+func (c *Cmd) GenerateShortArgumentsSection() string {
+	return c.generateArgumentsSection(false)
+}
+
+func (c *Cmd) GenerateLongArgumentsSection() string {
+	return c.generateArgumentsSection(true)
+}
+
+func (c *Cmd) GenerateShortGlobalOptionsSection() string {
+	return c.generateGlobalOptionsSection(false)
+}
+
+func (c *Cmd) GenerateLongGlobalOptionsSection() string {
+	return c.generateGlobalOptionsSection(true)
+}
+
+func (c *Cmd) generateDescription() string {
+	if c.description == "" {
+		return ""
+	}
+	return c.description + "\n\n"
+}
+
+func (c *Cmd) generateCommandsSection(isLongHelp bool) string {
+	if len(c.subCmds) == 0 {
+		return ""
+	}
+
 	var sb strings.Builder
 	headers := c.getUsageHeaders()
 
-	if c.description != "" {
-		sb.WriteString(c.description)
-		sb.WriteString("\n\n")
+	sb.WriteString("\n" + GreenBoldS(headers.Commands) + "\n")
+	// Sort subcommand names for consistent output
+	var subCmdNames []string
+	for name := range c.subCmds {
+		subCmdNames = append(subCmdNames, name)
+	}
+	sort.Strings(subCmdNames)
+	for _, name := range subCmdNames {
+		subCmd := c.subCmds[name]
+		if subCmd.description != "" {
+			sb.WriteString(fmt.Sprintf("  %-30s%s\n", name, subCmd.description))
+		} else {
+			sb.WriteString(fmt.Sprintf("  %s\n", name))
+		}
 	}
 
-	sb.WriteString(GreenBoldS(headers.Usage) + "\n  ")
-	sb.WriteString(c.generateSynopsis(isLongHelp))
-	sb.WriteString("\n")
+	return sb.String()
+}
 
-	// Separate script and global flags
-	var scriptFlags []any
-	var globalFlags []any
-
+func (c *Cmd) separateScriptAndGlobalFlags() (scriptFlags, globalFlags []any) {
 	// Use a map to keep track of added flags to avoid duplicates
 	addedFlags := make(map[string]bool)
 
@@ -119,32 +189,67 @@ func (c *Cmd) generateUsage(isLongHelp bool) string {
 		addedFlags[name] = true
 	}
 
-	if len(c.subCmds) > 0 {
-		sb.WriteString("\n" + GreenBoldS(headers.Commands) + "\n")
-		// Sort subcommand names for consistent output
-		var subCmdNames []string
-		for name := range c.subCmds {
-			subCmdNames = append(subCmdNames, name)
-		}
-		sort.Strings(subCmdNames)
-		for _, name := range subCmdNames {
-			subCmd := c.subCmds[name]
-			if subCmd.description != "" {
-				sb.WriteString(fmt.Sprintf("  %-30s%s\n", name, subCmd.description))
-			} else {
-				sb.WriteString(fmt.Sprintf("  %s\n", name))
-			}
-		}
+	return scriptFlags, globalFlags
+}
+
+func (c *Cmd) generateArgumentsSection(isLongHelp bool) string {
+	scriptFlags, _ := c.separateScriptAndGlobalFlags()
+
+	if len(scriptFlags) == 0 || !c.hasVisibleFlags(scriptFlags, isLongHelp) {
+		return ""
 	}
 
-	if len(scriptFlags) > 0 && c.hasVisibleFlags(scriptFlags, isLongHelp) {
-		sb.WriteString("\n" + GreenBoldS(headers.Arguments) + "\n")
-		sb.WriteString(c.formatFlags(scriptFlags, isLongHelp))
+	var sb strings.Builder
+	headers := c.getUsageHeaders()
+
+	sb.WriteString("\n" + GreenBoldS(headers.Arguments) + "\n")
+	sb.WriteString(c.formatFlags(scriptFlags, isLongHelp))
+
+	return sb.String()
+}
+
+func (c *Cmd) generateGlobalOptionsSection(isLongHelp bool) string {
+	_, globalFlags := c.separateScriptAndGlobalFlags()
+
+	if len(globalFlags) == 0 || !c.hasVisibleFlags(globalFlags, isLongHelp) {
+		return ""
 	}
 
-	if len(globalFlags) > 0 && c.hasVisibleFlags(globalFlags, isLongHelp) {
-		sb.WriteString("\n" + GreenBoldS(headers.GlobalOptions) + "\n")
-		sb.WriteString(c.formatFlags(globalFlags, isLongHelp))
+	var sb strings.Builder
+	headers := c.getUsageHeaders()
+
+	sb.WriteString("\n" + GreenBoldS(headers.GlobalOptions) + "\n")
+	sb.WriteString(c.formatFlags(globalFlags, isLongHelp))
+
+	return sb.String()
+}
+
+func (c *Cmd) generateUsage(isLongHelp bool) string {
+	var sb strings.Builder
+	headers := c.getUsageHeaders()
+
+	description := c.generateDescription()
+	if description != "" {
+		sb.WriteString(description)
+	}
+
+	sb.WriteString(GreenBoldS(headers.Usage) + "\n  ")
+	sb.WriteString(c.generateSynopsis(isLongHelp))
+	sb.WriteString("\n")
+
+	commandsSection := c.generateCommandsSection(isLongHelp)
+	if commandsSection != "" {
+		sb.WriteString(commandsSection)
+	}
+
+	argumentsSection := c.generateArgumentsSection(isLongHelp)
+	if argumentsSection != "" {
+		sb.WriteString(argumentsSection)
+	}
+
+	globalOptionsSection := c.generateGlobalOptionsSection(isLongHelp)
+	if globalOptionsSection != "" {
+		sb.WriteString(globalOptionsSection)
 	}
 
 	return sb.String()

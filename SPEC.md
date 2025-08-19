@@ -348,6 +348,49 @@ The following methods can be used to manually generate usage strings:
 - `GenerateShortUsage() string`
 - `GenerateLongUsage() string`
 
+#### Individual Usage Chunks
+
+Ra also provides methods to generate individual sections of the usage output, allowing for custom composition:
+
+**Description Section:**
+- `GenerateDescription() string` - Returns the command description with trailing newlines (empty string if no description)
+
+**Synopsis Section:**
+- `GenerateSynopsis(isLongHelp bool) string` - Returns the command synopsis line
+- `GenerateShortSynopsis() string` - Convenience method equivalent to `GenerateSynopsis(false)`
+- `GenerateLongSynopsis() string` - Convenience method equivalent to `GenerateSynopsis(true)`
+
+**Commands Section:**
+- `GenerateCommandsSection(isLongHelp bool) string` - Returns the subcommands section with header (empty string if no subcommands)
+- `GenerateShortCommandsSection() string` - Convenience method equivalent to `GenerateCommandsSection(false)`
+- `GenerateLongCommandsSection() string` - Convenience method equivalent to `GenerateCommandsSection(true)`
+
+**Arguments Section:**
+- `GenerateArgumentsSection(isLongHelp bool) string` - Returns the script-level arguments section with header (empty string if no visible arguments)
+- `GenerateShortArgumentsSection() string` - Convenience method equivalent to `GenerateArgumentsSection(false)`
+- `GenerateLongArgumentsSection() string` - Convenience method equivalent to `GenerateArgumentsSection(true)`
+
+**Global Options Section:**
+- `GenerateGlobalOptionsSection(isLongHelp bool) string` - Returns the global options section with header (empty string if no visible global options)
+- `GenerateShortGlobalOptionsSection() string` - Convenience method equivalent to `GenerateGlobalOptionsSection(false)`
+- `GenerateLongGlobalOptionsSection() string` - Convenience method equivalent to `GenerateGlobalOptionsSection(true)`
+
+**Example Usage:**
+```go
+// Generate only the synopsis
+synopsis := cmd.GenerateShortSynopsis()
+fmt.Println(synopsis) // Output: myapp <input> [OPTIONS]
+
+// Create custom usage by combining sections
+var customUsage strings.Builder
+customUsage.WriteString("My Custom Usage:\n")
+customUsage.WriteString(cmd.GenerateShortSynopsis())
+customUsage.WriteString("\n")
+customUsage.WriteString(cmd.GenerateShortArgumentsSection())
+```
+
+Note: Individual chunk methods respect the same visibility rules as the full usage generation (hidden flags, short vs. long help, etc.).
+
 ### Custom Usage
 
 - Override via `SetCustomUsage(func(isLongHelp bool))`. The boolean parameter indicates whether long help (`--help`) was requested.

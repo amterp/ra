@@ -1384,3 +1384,288 @@ Arguments:
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
 }
+
+func Test_IndividualUsageChunks_Description(t *testing.T) {
+	// Test with description
+	cmd := NewCmd("test")
+	cmd.SetDescription("This is a test command")
+
+	desc := cmd.GenerateDescription()
+	expected := "This is a test command\n\n"
+	assert.Equal(t, expected, desc)
+
+	// Test without description
+	cmdNoDesc := NewCmd("test2")
+	descEmpty := cmdNoDesc.GenerateDescription()
+	assert.Equal(t, "", descEmpty)
+}
+
+func Test_IndividualUsageChunks_Synopsis(t *testing.T) {
+	cmd := NewCmd("test")
+
+	// Add some flags to test synopsis generation
+	_, err := NewString("input").SetUsage("Input file").Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewBool("verbose").SetShort("v").SetUsage("Verbose mode").Register(cmd)
+	assert.NoError(t, err)
+
+	// Test short synopsis
+	shortSynopsis := cmd.GenerateShortSynopsis()
+	assert.Contains(t, shortSynopsis, "test")
+	assert.Contains(t, shortSynopsis, "<input>")
+	assert.Contains(t, shortSynopsis, "[OPTIONS]")
+
+	// Test long synopsis (should be same in this case)
+	longSynopsis := cmd.GenerateLongSynopsis()
+	assert.Equal(t, shortSynopsis, longSynopsis)
+
+	// Test explicit isLongHelp parameter
+	synopsis := cmd.GenerateSynopsis(false)
+	assert.Equal(t, shortSynopsis, synopsis)
+
+	synopsis = cmd.GenerateSynopsis(true)
+	assert.Equal(t, longSynopsis, synopsis)
+}
+
+func Test_IndividualUsageChunks_CommandsSection(t *testing.T) {
+	cmd := NewCmd("parent")
+
+	// Test without subcommands
+	commandsSection := cmd.GenerateCommandsSection(false)
+	assert.Equal(t, "", commandsSection)
+
+	// Add subcommands
+	subCmd1 := NewCmd("sub1")
+	subCmd1.SetDescription("First subcommand")
+	_, err := cmd.RegisterCmd(subCmd1)
+	assert.NoError(t, err)
+
+	subCmd2 := NewCmd("sub2")
+	subCmd2.SetDescription("Second subcommand")
+	_, err = cmd.RegisterCmd(subCmd2)
+	assert.NoError(t, err)
+
+	// Test with subcommands
+	commandsSection = cmd.GenerateShortCommandsSection()
+	assert.Contains(t, commandsSection, "Commands:")
+	assert.Contains(t, commandsSection, "sub1")
+	assert.Contains(t, commandsSection, "First subcommand")
+	assert.Contains(t, commandsSection, "sub2")
+	assert.Contains(t, commandsSection, "Second subcommand")
+
+	// Test convenience methods
+	assert.Equal(t, commandsSection, cmd.GenerateLongCommandsSection())
+}
+
+func Test_IndividualUsageChunks_ArgumentsSection(t *testing.T) {
+	cmd := NewCmd("test")
+
+	// Test without arguments
+	argsSection := cmd.GenerateArgumentsSection(false)
+	assert.Equal(t, "", argsSection)
+
+	// Add some script-level flags
+	_, err := NewString("input").SetUsage("Input file").Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewBool("verbose").SetShort("v").SetUsage("Verbose mode").Register(cmd)
+	assert.NoError(t, err)
+
+	// Test with arguments
+	argsSection = cmd.GenerateShortArgumentsSection()
+	assert.Contains(t, argsSection, "Arguments:")
+	assert.Contains(t, argsSection, "--input str")
+	assert.Contains(t, argsSection, "Input file")
+	assert.Contains(t, argsSection, "-v, --verbose")
+	assert.Contains(t, argsSection, "Verbose mode")
+
+	// Test convenience methods
+	longArgsSection := cmd.GenerateLongArgumentsSection()
+	assert.Equal(t, argsSection, longArgsSection)
+
+	// Test explicit isLongHelp parameter
+	assert.Equal(t, argsSection, cmd.GenerateArgumentsSection(false))
+	assert.Equal(t, longArgsSection, cmd.GenerateArgumentsSection(true))
+}
+
+func Test_IndividualUsageChunks_GlobalOptionsSection(t *testing.T) {
+	cmd := NewCmd("test")
+
+	// Test without global options
+	globalSection := cmd.GenerateGlobalOptionsSection(false)
+	assert.Equal(t, "", globalSection)
+
+	// Add global flags
+	_, err := NewBool("debug").SetShort("d").SetUsage("Debug mode").Register(cmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	_, err = NewString("config").SetUsage("Config file").Register(cmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Test with global options
+	globalSection = cmd.GenerateShortGlobalOptionsSection()
+	assert.Contains(t, globalSection, "Global options:")
+	assert.Contains(t, globalSection, "-d, --debug")
+	assert.Contains(t, globalSection, "Debug mode")
+	assert.Contains(t, globalSection, "--config str")
+	assert.Contains(t, globalSection, "Config file")
+
+	// Test convenience methods
+	longGlobalSection := cmd.GenerateLongGlobalOptionsSection()
+	assert.Equal(t, globalSection, longGlobalSection)
+
+	// Test explicit isLongHelp parameter
+	assert.Equal(t, globalSection, cmd.GenerateGlobalOptionsSection(false))
+	assert.Equal(t, longGlobalSection, cmd.GenerateGlobalOptionsSection(true))
+}
+
+func Test_IndividualUsageChunks_HiddenFlags(t *testing.T) {
+	cmd := NewCmd("test")
+
+	// Add regular flag
+	_, err := NewString("visible").SetUsage("Visible flag").Register(cmd)
+	assert.NoError(t, err)
+
+	// Add hidden flag
+	_, err = NewString("hidden").SetUsage("Hidden flag").SetHidden(true).Register(cmd)
+	assert.NoError(t, err)
+
+	// Add flag hidden in short help only
+	_, err = NewString("long-only").SetUsage("Long help only").SetHiddenInShortHelp(true).Register(cmd)
+	assert.NoError(t, err)
+
+	// Test short help - should exclude long-only flag
+	shortArgs := cmd.GenerateShortArgumentsSection()
+	assert.Contains(t, shortArgs, "visible")
+	assert.NotContains(t, shortArgs, "hidden")
+	assert.NotContains(t, shortArgs, "long-only")
+
+	// Test long help - should include long-only flag but not hidden
+	longArgs := cmd.GenerateLongArgumentsSection()
+	assert.Contains(t, longArgs, "visible")
+	assert.NotContains(t, longArgs, "hidden")
+	assert.Contains(t, longArgs, "long-only")
+}
+
+func Test_IndividualUsageChunks_CombinedOutputMatchesOriginal(t *testing.T) {
+	cmd := NewCmd("myapp")
+	cmd.SetDescription("Test application for comparing outputs")
+
+	// Add various types of flags and subcommands
+	_, err := NewString("input").SetUsage("Input file").Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewBool("verbose").SetShort("v").SetUsage("Verbose mode").Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewString("config").SetUsage("Config file").Register(cmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	subCmd := NewCmd("sub")
+	subCmd.SetDescription("A subcommand")
+	_, err = cmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	// Generate original usage
+	originalShort := cmd.GenerateShortUsage()
+	originalLong := cmd.GenerateLongUsage()
+
+	// Generate using individual chunks
+	var sb strings.Builder
+
+	desc := cmd.GenerateDescription()
+	if desc != "" {
+		sb.WriteString(desc)
+	}
+
+	headers := cmd.getUsageHeaders()
+	sb.WriteString(GreenBoldS(headers.Usage) + "\n  ")
+	sb.WriteString(cmd.GenerateShortSynopsis())
+	sb.WriteString("\n")
+
+	commandsSection := cmd.GenerateShortCommandsSection()
+	if commandsSection != "" {
+		sb.WriteString(commandsSection)
+	}
+
+	argsSection := cmd.GenerateShortArgumentsSection()
+	if argsSection != "" {
+		sb.WriteString(argsSection)
+	}
+
+	globalSection := cmd.GenerateShortGlobalOptionsSection()
+	if globalSection != "" {
+		sb.WriteString(globalSection)
+	}
+
+	combinedShort := sb.String()
+
+	// Test they match
+	assert.Equal(t, originalShort, combinedShort)
+
+	// Test long version too
+	var sbLong strings.Builder
+
+	desc = cmd.GenerateDescription()
+	if desc != "" {
+		sbLong.WriteString(desc)
+	}
+
+	sbLong.WriteString(GreenBoldS(headers.Usage) + "\n  ")
+	sbLong.WriteString(cmd.GenerateLongSynopsis())
+	sbLong.WriteString("\n")
+
+	commandsSection = cmd.GenerateLongCommandsSection()
+	if commandsSection != "" {
+		sbLong.WriteString(commandsSection)
+	}
+
+	argsSection = cmd.GenerateLongArgumentsSection()
+	if argsSection != "" {
+		sbLong.WriteString(argsSection)
+	}
+
+	globalSection = cmd.GenerateLongGlobalOptionsSection()
+	if globalSection != "" {
+		sbLong.WriteString(globalSection)
+	}
+
+	combinedLong := sbLong.String()
+	assert.Equal(t, originalLong, combinedLong)
+}
+
+func Test_IndividualUsageChunks_CustomHeaders(t *testing.T) {
+	cmd := NewCmd("test")
+
+	// Set custom headers
+	customHeaders := UsageHeaders{
+		Usage:         "How to use:",
+		Commands:      "Available commands:",
+		Arguments:     "Parameters:",
+		GlobalOptions: "Global flags:",
+	}
+	cmd.SetUsageHeaders(customHeaders)
+
+	// Add content to test headers
+	_, err := NewString("input").SetUsage("Input file").Register(cmd)
+	assert.NoError(t, err)
+
+	_, err = NewString("global").SetUsage("Global flag").Register(cmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	subCmd := NewCmd("sub")
+	subCmd.SetDescription("A subcommand")
+	_, err = cmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	// Test that custom headers appear in individual sections
+	argsSection := cmd.GenerateArgumentsSection(false)
+	assert.Contains(t, argsSection, "Parameters:")
+
+	globalSection := cmd.GenerateGlobalOptionsSection(false)
+	assert.Contains(t, globalSection, "Global flags:")
+
+	commandsSection := cmd.GenerateCommandsSection(false)
+	assert.Contains(t, commandsSection, "Available commands:")
+}

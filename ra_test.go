@@ -3217,6 +3217,251 @@ func Test_UsageGeneration_NameBasedShadowing(t *testing.T) {
 	assert.Contains(t, longUsage, "Global options:")
 }
 
+func Test_GlobalFlagNameShadowing_WithShort(t *testing.T) {
+	rootCmd := NewCmd("test")
+
+	globalFlag, err := NewString("verbose").
+		SetShort("v").
+		SetUsage("Global verbose flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	nonGlobalFlag, err := NewString("verbose").
+		SetShort("x").
+		SetUsage("Non-global verbose argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	usage := rootCmd.GenerateUsage(true)
+	expected := `Usage:
+  test <verbose> [OPTIONS]
+
+Arguments:
+  -x, --verbose str   Non-global verbose argument
+
+Global options:
+  -v str   (optional) Global verbose flag
+`
+	assert.Equal(t, expected, usage)
+
+	err = rootCmd.ParseOrError([]string{"-v", "global-value", "non-global-value"})
+	assert.NoError(t, err)
+	assert.Equal(t, "global-value", *globalFlag)
+	assert.Equal(t, "non-global-value", *nonGlobalFlag)
+
+	// Reset for second test
+	*globalFlag = ""
+	*nonGlobalFlag = ""
+
+	err = rootCmd.ParseOrError([]string{"-x", "non-global-value2"})
+	assert.NoError(t, err)
+	assert.Equal(t, "", *globalFlag)
+	assert.Equal(t, "non-global-value2", *nonGlobalFlag)
+}
+
+func Test_GlobalFlagNameShadowing_WithoutShort(t *testing.T) {
+	rootCmd := NewCmd("test")
+
+	globalFlag, err := NewString("config").
+		SetUsage("Global config flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	nonGlobalFlag, err := NewString("config").
+		SetShort("c").
+		SetUsage("Non-global config argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	usage := rootCmd.GenerateUsage(true)
+	expected := `Usage:
+  test <config> [OPTIONS]
+
+Arguments:
+  -c, --config str   Non-global config argument
+`
+	assert.Equal(t, expected, usage)
+
+	err = rootCmd.ParseOrError([]string{"-c", "non-global-value"})
+	assert.NoError(t, err)
+	assert.Equal(t, "", *globalFlag)
+	assert.Equal(t, "non-global-value", *nonGlobalFlag)
+}
+
+func Test_GlobalFlagNameShadowing_WithSubcommands(t *testing.T) {
+	rootCmd := NewCmd("root")
+
+	globalFlag, err := NewString("verbose").
+		SetShort("v").
+		SetUsage("Global verbose flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	nonGlobalFlag, err := NewString("verbose").
+		SetShort("x").
+		SetUsage("Non-global verbose argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	subCmd := NewCmd("sub")
+	subArg, err := NewString("subarg").Register(subCmd)
+	assert.NoError(t, err)
+	subInvoked, err := rootCmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	rootUsage := rootCmd.GenerateUsage(true)
+	expectedRoot := `Usage:
+  root [subcommand] <verbose> [OPTIONS]
+
+Commands:
+  sub
+
+Arguments:
+  -x, --verbose str   Non-global verbose argument
+
+Global options:
+  -v str   (optional) Global verbose flag
+`
+	assert.Equal(t, expectedRoot, rootUsage)
+
+	subUsage := subCmd.GenerateUsage(true)
+	expectedSub := `Usage:
+  sub <subarg> [OPTIONS]
+
+Arguments:
+      --subarg str
+
+Global options:
+  -v, --verbose str   (optional) Global verbose flag
+`
+	assert.Equal(t, expectedSub, subUsage)
+
+	err = rootCmd.ParseOrError([]string{"sub", "-v", "global-value", "sub-value"})
+	assert.NoError(t, err)
+	assert.True(t, *subInvoked)
+	assert.Equal(t, "global-value", *globalFlag)
+	assert.Equal(t, "sub-value", *subArg)
+	assert.Equal(t, "", *nonGlobalFlag)
+
+	// Reset for second test
+	*globalFlag = ""
+	*nonGlobalFlag = ""
+	*subInvoked = false
+
+	err = rootCmd.ParseOrError([]string{"-x", "non-global-value"})
+	assert.NoError(t, err)
+	assert.False(t, *subInvoked)
+	assert.Equal(t, "", *globalFlag)
+	assert.Equal(t, "non-global-value", *nonGlobalFlag)
+}
+
+func Test_GlobalFlagNameShadowing_MultipleFlags(t *testing.T) {
+	rootCmd := NewCmd("test")
+
+	globalDebug, err := NewBool("debug").
+		SetShort("d").
+		SetUsage("Global debug flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	globalConfig, err := NewString("config").
+		SetUsage("Global config flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	globalVerbose, err := NewString("verbose").
+		SetShort("v").
+		SetUsage("Global verbose flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	nonGlobalConfig, err := NewString("config").
+		SetShort("c").
+		SetUsage("Non-global config argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	nonGlobalVerbose, err := NewString("verbose").
+		SetShort("x").
+		SetUsage("Non-global verbose argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	usage := rootCmd.GenerateUsage(true)
+	expected := `Usage:
+  test <config> <verbose> [OPTIONS]
+
+Arguments:
+  -c, --config str    Non-global config argument
+  -x, --verbose str   Non-global verbose argument
+
+Global options:
+  -d, --debug   Global debug flag
+  -v str        (optional) Global verbose flag
+`
+	assert.Equal(t, expected, usage)
+
+	err = rootCmd.ParseOrError([]string{"-d", "-v", "global-verbose", "config-val", "verbose-val"})
+	assert.NoError(t, err)
+	assert.True(t, *globalDebug)
+	assert.Equal(t, "", *globalConfig)
+	assert.Equal(t, "global-verbose", *globalVerbose)
+	assert.Equal(t, "config-val", *nonGlobalConfig)
+	assert.Equal(t, "verbose-val", *nonGlobalVerbose)
+}
+
+func Test_GlobalFlagNameShadowing_Ordering(t *testing.T) {
+	rootCmd := NewCmd("test")
+
+	// Register flags in a specific order to verify ordering is preserved
+	globalFirst, err := NewString("first").
+		SetShort("f").
+		SetUsage("First global flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	globalSecond, err := NewString("second").
+		SetShort("s").
+		SetUsage("Second global flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	globalThird, err := NewString("third").
+		SetShort("t").
+		SetUsage("Third global flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Shadow the middle flag's name only (not short)
+	nonGlobalSecond, err := NewString("second").
+		SetShort("x").
+		SetUsage("Non-global second argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	usage := rootCmd.GenerateUsage(true)
+	expected := `Usage:
+  test <second> [OPTIONS]
+
+Arguments:
+  -x, --second str   Non-global second argument
+
+Global options:
+  -f, --first str   (optional) First global flag
+  -s str            (optional) Second global flag
+  -t, --third str   (optional) Third global flag
+`
+	assert.Equal(t, expected, usage)
+
+	// Verify parsing works in correct order
+	err = rootCmd.ParseOrError([]string{"-f", "first-val", "-s", "second-val", "-t", "third-val", "non-global-val"})
+	assert.NoError(t, err)
+	assert.Equal(t, "first-val", *globalFirst)
+	assert.Equal(t, "second-val", *globalSecond)
+	assert.Equal(t, "third-val", *globalThird)
+	assert.Equal(t, "non-global-val", *nonGlobalSecond)
+}
+
 func Test_UsageGeneration_HiddenGlobalFlags_NoGlobalHeader(t *testing.T) {
 	rootCmd := NewCmd("root")
 
@@ -3290,4 +3535,38 @@ func Test_UsageGeneration_HiddenScriptFlags_NoArgumentsHeader(t *testing.T) {
 
 	// Should NOT show the hidden script flag
 	assert.NotContains(t, usage, "Hidden name argument")
+}
+
+func Test_GlobalFlagNameAndShortShadowing_Bug(t *testing.T) {
+	rootCmd := NewCmd("test")
+
+	// Register a global flag with both name and short
+	globalFlag, err := NewString("verbose").
+		SetShort("v").
+		SetUsage("Global verbose flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Register a non-global flag that shadows BOTH name and short
+	nonGlobalFlag, err := NewString("verbose").
+		SetShort("v").
+		SetUsage("Non-global verbose argument").
+		Register(rootCmd)
+	assert.NoError(t, err)
+
+	// Generate usage - the non-global flag should appear in Arguments, not Global options
+	usage := rootCmd.GenerateUsage(true)
+	expected := `Usage:
+  test <verbose> [OPTIONS]
+
+Arguments:
+  -v, --verbose str   Non-global verbose argument
+`
+	assert.Equal(t, expected, usage)
+
+	// Verify parsing works correctly - non-global flag should get the value
+	err = rootCmd.ParseOrError([]string{"-v", "test-value"})
+	assert.NoError(t, err)
+	assert.Equal(t, "", *globalFlag)              // Global flag should not receive the value
+	assert.Equal(t, "test-value", *nonGlobalFlag) // Non-global flag should receive the value
 }

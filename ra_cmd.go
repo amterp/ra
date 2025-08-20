@@ -29,6 +29,7 @@ type Cmd struct {
 	globalFlags           []string        // flags that will be applied to all subcommands
 	overriddenGlobalFlags map[string]any  // global flags that were overridden by non-global flags (name collisions)
 	shadowedShortFlags    map[string]bool // global flags that lost their short flag to non-global flags (short collisions)
+	shadowedNameFlags     map[string]bool // global flags that lost their name to non-global flags (name collisions)
 	subCmds               map[string]*Cmd
 	shortToName           map[string]string // short flag -> full name mapping
 
@@ -54,6 +55,7 @@ func NewCmd(name string) *Cmd {
 		positional:            []string{},
 		overriddenGlobalFlags: make(map[string]any),
 		shadowedShortFlags:    make(map[string]bool),
+		shadowedNameFlags:     make(map[string]bool),
 		subCmds:               make(map[string]*Cmd),
 		configured:            make(map[string]bool),
 		helpEnabled:           true,
@@ -218,31 +220,64 @@ func (c *Cmd) checkForGlobalFlagOverride(flagName string, flagShort string, isGl
 				}
 			}
 			if isExistingGlobal {
-				// Store the global flag for subcommands
-				c.overriddenGlobalFlags[flagName] = existingFlag
+				// Check if the non-global flag also conflicts on short
+				base := getBaseFlag(existingFlag)
+				hasShortConflict := base != nil && base.Short != "" && flagShort == base.Short
 
-				// Remove short flag mapping if it exists
-				if base := getBaseFlag(existingFlag); base != nil && base.Short != "" {
-					delete(c.shortToName, base.Short)
-				}
+				if hasShortConflict {
+					// Both name and short conflict - let non-global completely override
+					c.overriddenGlobalFlags[flagName] = existingFlag
 
-				// Keep the flag in globalFlags list so it can be applied to subcommands
-				// (The usage generation will be fixed by the override logic)
-
-				// Remove from positional/non-positional lists so we can re-add the non-global version
-				for i, name := range c.positional {
-					if name == flagName {
-						c.positional = append(c.positional[:i], c.positional[i+1:]...)
-						break
+					// Remove short flag mapping
+					if base.Short != "" {
+						delete(c.shortToName, base.Short)
 					}
-				}
-				for i, name := range c.nonPositional {
-					if name == flagName {
-						c.nonPositional = append(c.nonPositional[:i], c.nonPositional[i+1:]...)
-						break
+
+					// Remove from positional/nonPositional lists
+					for i, name := range c.positional {
+						if name == flagName {
+							c.positional = append(c.positional[:i], c.positional[i+1:]...)
+							break
+						}
 					}
+					for i, name := range c.nonPositional {
+						if name == flagName {
+							c.nonPositional = append(c.nonPositional[:i], c.nonPositional[i+1:]...)
+							break
+						}
+					}
+
+					return true, nil
+				} else {
+					// Only name conflicts - apply name shadowing logic
+					c.overriddenGlobalFlags[flagName] = existingFlag
+					c.shadowedNameFlags[flagName] = true
+
+					// Store the global flag under a special key so it can still be parsed
+					if base != nil && base.Short != "" {
+						// Update shortToName to point to the short key for the global flag
+						c.shortToName[base.Short] = base.Short // "-v" maps to "v"
+						// Store global flag under its short name
+						c.flags[base.Short] = existingFlag
+					}
+					// The non-global flag will be stored under the original name "verbose"
+
+					// Remove the global flag from positional/nonPositional lists
+					for i, name := range c.positional {
+						if name == flagName {
+							c.positional = append(c.positional[:i], c.positional[i+1:]...)
+							break
+						}
+					}
+					for i, name := range c.nonPositional {
+						if name == flagName {
+							c.nonPositional = append(c.nonPositional[:i], c.nonPositional[i+1:]...)
+							break
+						}
+					}
+
+					return true, nil
 				}
-				return true, nil
 			} else {
 				return false, fmt.Errorf("flag %q already defined", flagName)
 			}

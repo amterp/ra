@@ -119,6 +119,7 @@ func (c *Cmd) separateScriptAndGlobalFlags() (scriptFlags, globalFlags []any) {
 	// Use a map to keep track of added flags to avoid duplicates
 	addedFlags := make(map[string]bool)
 
+	// First, handle all script flags (positional and non-positional)
 	// Process positional flags in registration order
 	for _, name := range c.positional {
 		if addedFlags[name] {
@@ -126,29 +127,38 @@ func (c *Cmd) separateScriptAndGlobalFlags() (scriptFlags, globalFlags []any) {
 		}
 		flag := c.flags[name]
 
-		isGlobal := false
+		// Check if this is originally a global flag
+		isOriginallyGlobal := false
 		for _, gName := range c.globalFlags {
 			if name == gName {
-				isGlobal = true
+				isOriginallyGlobal = true
 				break
 			}
 		}
 
-		// Handle different types of global flag overrides
+		// Check if this flag represents a non-global override of a global flag
+		isNonGlobalOverride := false
 		if _, wasOverridden := c.overriddenGlobalFlags[name]; wasOverridden {
-			// Check if this was a short flag collision (should remain global) vs name collision (becomes script)
-			if _, hadShortShadowed := c.shadowedShortFlags[name]; hadShortShadowed {
-				// Short flag collision - keep as global flag (it just lost its short)
-				// isGlobal remains true
+			// Check what type of override this is
+			if _, hadNameShadowed := c.shadowedNameFlags[name]; hadNameShadowed {
+				// Name shadowing case - the non-global flag took over the name
+				// The flag stored under this name is the non-global flag
+				isNonGlobalOverride = true
+			} else if _, hadShortShadowed := c.shadowedShortFlags[name]; hadShortShadowed {
+				// Short shadowing case - the global flag lost its short but kept its name
+				// The flag stored under this name is still the global flag (modified)
+				isNonGlobalOverride = false
 			} else {
-				// Name collision - treat as script flag
-				isGlobal = false
+				// Complete override case - both name and short conflicted
+				// The flag stored under this name is the non-global flag
+				isNonGlobalOverride = true
 			}
 		}
 
-		if isGlobal {
-			globalFlags = append(globalFlags, flag)
-		} else {
+		// Add to scriptFlags if:
+		// 1. Not originally global, OR
+		// 2. It's a non-global flag that overrode a global flag
+		if !isOriginallyGlobal || isNonGlobalOverride {
 			scriptFlags = append(scriptFlags, flag)
 		}
 		addedFlags[name] = true
@@ -161,32 +171,82 @@ func (c *Cmd) separateScriptAndGlobalFlags() (scriptFlags, globalFlags []any) {
 		}
 		flag := c.flags[name]
 
-		isGlobal := false
+		// Check if this is originally a global flag
+		isOriginallyGlobal := false
 		for _, gName := range c.globalFlags {
 			if name == gName {
-				isGlobal = true
+				isOriginallyGlobal = true
 				break
 			}
 		}
 
-		// Handle different types of global flag overrides
+		// Check if this flag represents a non-global override of a global flag
+		isNonGlobalOverride := false
 		if _, wasOverridden := c.overriddenGlobalFlags[name]; wasOverridden {
-			// Check if this was a short flag collision (should remain global) vs name collision (becomes script)
-			if _, hadShortShadowed := c.shadowedShortFlags[name]; hadShortShadowed {
-				// Short flag collision - keep as global flag (it just lost its short)
-				// isGlobal remains true
+			// Check what type of override this is
+			if _, hadNameShadowed := c.shadowedNameFlags[name]; hadNameShadowed {
+				// Name shadowing case - the non-global flag took over the name
+				// The flag stored under this name is the non-global flag
+				isNonGlobalOverride = true
+			} else if _, hadShortShadowed := c.shadowedShortFlags[name]; hadShortShadowed {
+				// Short shadowing case - the global flag lost its short but kept its name
+				// The flag stored under this name is still the global flag (modified)
+				isNonGlobalOverride = false
 			} else {
-				// Name collision - treat as script flag
-				isGlobal = false
+				// Complete override case - both name and short conflicted
+				// The flag stored under this name is the non-global flag
+				isNonGlobalOverride = true
 			}
 		}
 
-		if isGlobal {
-			globalFlags = append(globalFlags, flag)
-		} else {
+		// Add to scriptFlags if:
+		// 1. Not originally global, OR
+		// 2. It's a non-global flag that overrode a global flag
+		if !isOriginallyGlobal || isNonGlobalOverride {
 			scriptFlags = append(scriptFlags, flag)
 		}
 		addedFlags[name] = true
+	}
+
+	// Process global flags in their registration order to preserve ordering
+	for _, globalFlagName := range c.globalFlags {
+		// Check if this global flag was name-shadowed
+		if _, hadNameShadowed := c.shadowedNameFlags[globalFlagName]; hadNameShadowed {
+			// Add name-shadowed global flag (appears with only its short form)
+			if originalFlag, exists := c.overriddenGlobalFlags[globalFlagName]; exists {
+				if base := getBaseFlag(originalFlag); base != nil && base.Short != "" {
+					// Look up the flag stored under its short key
+					if shortFlag, shortExists := c.flags[base.Short]; shortExists {
+						// Create a copy without the name for display
+						flagCopy := deepCopyFlag(shortFlag)
+						if baseCopy := getBaseFlag(flagCopy); baseCopy != nil {
+							baseCopy.Name = "" // Remove name for display, keep only short
+						}
+						globalFlags = append(globalFlags, flagCopy)
+					}
+				}
+			}
+		} else {
+			// Check if this global flag was completely overridden (both name and short conflicted)
+			if _, wasOverridden := c.overriddenGlobalFlags[globalFlagName]; wasOverridden {
+				// Check what type of override this was
+				if _, hadShortShadowed := c.shadowedShortFlags[globalFlagName]; hadShortShadowed {
+					// Short shadowing case - global flag lost its short but should still appear in Global options
+					if flag, exists := c.flags[globalFlagName]; exists {
+						globalFlags = append(globalFlags, flag)
+					}
+				} else {
+					// Complete override case - global flag was completely replaced, don't show it
+					// (the non-global override will appear in Arguments section)
+					continue
+				}
+			} else {
+				// Regular global flag - add if it exists
+				if flag, exists := c.flags[globalFlagName]; exists {
+					globalFlags = append(globalFlags, flag)
+				}
+			}
+		}
 	}
 
 	return scriptFlags, globalFlags
@@ -505,10 +565,18 @@ func (c *Cmd) formatFlags(flags []any, isLongHelp bool) string {
 		if base.PositionalOnly {
 			// Positional-only flags show without dashes
 			flagPart = fmt.Sprintf("  %s", base.Name)
-		} else if base.Short != "" {
+		} else if base.Name == "" && base.Short != "" {
+			// Name-shadowed flag - show only short form
+			flagPart = fmt.Sprintf("  -%s", base.Short)
+		} else if base.Short != "" && base.Name != "" {
+			// Normal flag with both short and name
 			flagPart = fmt.Sprintf("  -%s, --%s", base.Short, base.Name)
-		} else {
+		} else if base.Name != "" {
+			// Flag with only name (no short)
 			flagPart = fmt.Sprintf("      --%s", base.Name)
+		} else {
+			// Shouldn't happen - flag with neither name nor short
+			flagPart = fmt.Sprintf("  (unnamed flag)")
 		}
 
 		typeStr := getFlagType(flag)

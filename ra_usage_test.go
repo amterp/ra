@@ -554,7 +554,7 @@ Arguments:
       --rate float    Processing rate Range: (0, 100]
       --retries int   Number of retries Range: [0, )
       --format str    Output format Valid values: [json, yaml, xml, csv]. (default json)
-      --name str      Resource name Must match pattern: ^[a-zA-Z][a-zA-Z0-9_-]*$
+      --name str      Resource name Regex: ^[a-zA-Z][a-zA-Z0-9_-]*$
       --tags strs     Resource tags Separator: "|". Requires: name
       --debug         Enable debug mode Excludes: quiet, silent
   -q, --quiet         Suppress output Excludes: debug, verbose
@@ -914,7 +914,7 @@ Usage:
   complex <mode> [rate] [config-files...] [OPTIONS]
 
 Arguments:
-      --mode str                 Operation mode Must match pattern: ^(dev|prod|test)$
+      --mode str                 Operation mode Regex: ^(dev|prod|test)$
       --rate float               Processing rate Range: (0, 1). (default 0.5)
       --config-files [strs...]   Configuration files Separator: ":". Requires: mode
   -v, --verbose                  Verbose output Requires: mode. Excludes: quiet, silent

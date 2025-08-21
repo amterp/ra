@@ -1096,6 +1096,54 @@ func (c *Cmd) validateRequired() error {
 		}
 	}
 
+	// Check if any configured flags bypass validation
+	for name := range c.configured {
+		if flag, exists := c.flags[name]; exists {
+			switch f := flag.(type) {
+			case *BoolFlag:
+				if f.BypassValidation {
+					return nil // Skip validation entirely
+				}
+			case *StringFlag:
+				if f.BypassValidation {
+					return nil // Skip validation entirely
+				}
+			case *Int64Flag:
+				if f.BypassValidation {
+					return nil // Skip validation entirely
+				}
+			case *IntFlag:
+				if f.BypassValidation {
+					return nil // Skip validation entirely
+				}
+			case *Float64Flag:
+				if f.BypassValidation {
+					return nil // Skip validation entirely
+				}
+			case *SliceFlag[string]:
+				if f.BypassValidation {
+					return nil // Skip validation entirely
+				}
+			case *SliceFlag[int]:
+				if f.BypassValidation {
+					return nil // Skip validation entirely
+				}
+			case *SliceFlag[int64]:
+				if f.BypassValidation {
+					return nil // Skip validation entirely
+				}
+			case *SliceFlag[float64]:
+				if f.BypassValidation {
+					return nil // Skip validation entirely
+				}
+			case *SliceFlag[bool]:
+				if f.BypassValidation {
+					return nil // Skip validation entirely
+				}
+			}
+		}
+	}
+
 	// Second pass: Check if required flags are missing
 	// This runs after relational constraints so more specific errors take precedence
 	// Check in registration order: positional flags first, then non-positional flags

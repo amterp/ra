@@ -3,12 +3,19 @@ package ra
 type RegisterOption func(*registerConfig)
 
 type registerConfig struct {
-	global bool
+	global           bool
+	bypassValidation bool
 }
 
 func WithGlobal(g bool) RegisterOption {
 	return func(c *registerConfig) {
 		c.global = g
+	}
+}
+
+func WithBypassValidation(b bool) RegisterOption {
+	return func(c *registerConfig) {
+		c.bypassValidation = b
 	}
 }
 

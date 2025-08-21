@@ -727,7 +727,7 @@ func (c *Cmd) getConstraintString(flag any) string {
 
 	// Add enum or regex constraints (regex takes priority if both exist)
 	if regexStr := c.getRegexString(flag); regexStr != "" {
-		parts = append(parts, "Must match pattern: "+regexStr)
+		parts = append(parts, "Regex: "+regexStr)
 	} else if enumStr := c.getEnumString(flag); enumStr != "" {
 		parts = append(parts, "Valid values: "+enumStr)
 	}

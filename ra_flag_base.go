@@ -12,6 +12,7 @@ type BaseFlag struct {
 	FlagOnly          bool      // Can only be passed as --flag, not positionally
 	Excludes          *[]string // Flags that cannot be used with this flag
 	Requires          *[]string // Flags that must be present when this flag is used
+	BypassValidation  bool      // If true, this flag can bypass normal validation requirements
 }
 type Flag[T any] struct {
 	BaseFlag

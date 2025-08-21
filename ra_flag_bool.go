@@ -87,6 +87,7 @@ func (f *BoolFlag) RegisterWithPtr(cmd *Cmd, ptr *bool, opts ...RegisterOption) 
 	// Create copy and set value pointer
 	flag := *f
 	flag.Value = ptr
+	flag.BypassValidation = regConf.bypassValidation
 
 	// Global flags should be flag-only (not positional)
 	// Bool flags are always flag-only (non-positional)

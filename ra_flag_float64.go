@@ -102,6 +102,7 @@ func (f *Float64Flag) RegisterWithPtr(cmd *Cmd, ptr *float64, opts ...RegisterOp
 	// Create copy and set value pointer
 	flag := *f
 	flag.Value = ptr
+	flag.BypassValidation = regConf.bypassValidation
 
 	// Global flags should be flag-only (not positional)
 	if regConf.global {

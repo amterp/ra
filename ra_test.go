@@ -3612,3 +3612,108 @@ Arguments:
 	assert.Equal(t, "", *globalFlag)              // Global flag should not receive the value
 	assert.Equal(t, "test-value", *nonGlobalFlag) // Non-global flag should receive the value
 }
+
+func Test_FlagsProcessedBeforeHelp(t *testing.T) {
+	// This test verifies that flags are parsed before help is processed
+	// This ensures that flags like --color=never can affect help output
+	cmd := NewCmd("test")
+
+	// Add a flag that tracks if it was processed
+	colorFlag, err := NewString("color").
+		SetUsage("Control output colorization").
+		SetDefault("auto").
+		Register(cmd)
+	assert.NoError(t, err)
+
+	// First test: parse flags normally (should work)
+	err = cmd.ParseOrError([]string{"--color", "never"})
+	assert.NoError(t, err)
+	assert.Equal(t, "never", *colorFlag)
+
+	// Reset for help test
+	cmd = NewCmd("test")
+	colorFlag, err = NewString("color").
+		SetUsage("Control output colorization").
+		SetDefault("auto").
+		Register(cmd)
+	assert.NoError(t, err)
+
+	// Second test: parse with help flag present
+	// The important thing is that flags should be processed even when help is requested
+	err = cmd.ParseOrError([]string{"--color", "never", "-h"})
+
+	// Should return HelpInvokedErr
+	assert.Equal(t, HelpInvokedErr, err)
+
+	// The key test: the color flag should have been processed before help was triggered
+	assert.Equal(t, "never", *colorFlag, "Flag should be processed even when help is requested")
+}
+
+func Test_HelpHooks(t *testing.T) {
+	// Test that pre/post hooks are called correctly
+	var preHelpCalled bool
+	var postHelpCalled bool
+	var preHelpIsLongHelp bool
+	var postHelpIsLongHelp bool
+
+	cmd := NewCmd("test")
+	colorFlag, err := NewString("color").
+		SetUsage("Control output colorization").
+		SetDefault("auto").
+		Register(cmd)
+	assert.NoError(t, err)
+
+	cmd.SetHelpHooks(&HelpHooks{
+		PreHelp: func(c *Cmd, isLongHelp bool) {
+			preHelpCalled = true
+			preHelpIsLongHelp = isLongHelp
+
+			// Verify that flags are available in pre-hook
+			assert.Equal(t, "never", *colorFlag)
+		},
+		PostHelp: func(c *Cmd, isLongHelp bool) {
+			postHelpCalled = true
+			postHelpIsLongHelp = isLongHelp
+		},
+	})
+
+	// Test with short help (-h)
+	err = cmd.ParseOrError([]string{"--color", "never", "-h"})
+	assert.Equal(t, HelpInvokedErr, err)
+
+	assert.True(t, preHelpCalled, "PreHelp hook should be called")
+	assert.True(t, postHelpCalled, "PostHelp hook should be called")
+	assert.False(t, preHelpIsLongHelp, "Short help should pass false to hooks")
+	assert.False(t, postHelpIsLongHelp, "Short help should pass false to hooks")
+
+	// Reset for long help test
+	preHelpCalled = false
+	postHelpCalled = false
+
+	cmd = NewCmd("test")
+	colorFlag, err = NewString("color").
+		SetUsage("Control output colorization").
+		SetDefault("auto").
+		Register(cmd)
+	assert.NoError(t, err)
+
+	cmd.SetHelpHooks(&HelpHooks{
+		PreHelp: func(c *Cmd, isLongHelp bool) {
+			preHelpCalled = true
+			preHelpIsLongHelp = isLongHelp
+		},
+		PostHelp: func(c *Cmd, isLongHelp bool) {
+			postHelpCalled = true
+			postHelpIsLongHelp = isLongHelp
+		},
+	})
+
+	// Test with long help (--help)
+	err = cmd.ParseOrError([]string{"--color", "never", "--help"})
+	assert.Equal(t, HelpInvokedErr, err)
+
+	assert.True(t, preHelpCalled, "PreHelp hook should be called")
+	assert.True(t, postHelpCalled, "PostHelp hook should be called")
+	assert.True(t, preHelpIsLongHelp, "Long help should pass true to hooks")
+	assert.True(t, postHelpIsLongHelp, "Long help should pass true to hooks")
+}

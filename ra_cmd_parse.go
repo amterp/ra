@@ -93,34 +93,13 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 		return err
 	}
 
-	// Check for help flags (only if helpEnabled is true)
-	if c.helpEnabled {
-		for _, arg := range args {
-			if arg == "--help" {
-				var output string
-				if c.customUsage != nil {
-					c.customUsage(true) // Long help
-					output = ""         // Custom usage handles output directly
-				} else {
-					output = c.GenerateLongUsage()
-				}
-				return &helpInvokedError{output: output, exitCode: 0, useStdout: true}
-			}
-			if arg == "-h" {
-				var output string
-				if c.customUsage != nil {
-					c.customUsage(false)
-					output = "" // Custom usage handles output directly
-				} else {
-					output = c.GenerateShortUsage()
-				}
-				return &helpInvokedError{output: output, exitCode: 0, useStdout: true}
-			}
-		}
-	}
-
 	// Check for auto-help: if enabled, no args provided, and command has required flags
 	if c.autoHelpOnNoArgs && len(args) == 0 && c.hasRequiredFlags() {
+		// Call pre-help hook
+		if c.helpHooks != nil && c.helpHooks.PreHelp != nil {
+			c.helpHooks.PreHelp(c, false) // Use short help (false) for auto-help
+		}
+
 		var output string
 		if c.customUsage != nil {
 			c.customUsage(false) // Use short help (false) for auto-help
@@ -128,6 +107,12 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 		} else {
 			output = c.GenerateShortUsage()
 		}
+
+		// Call post-help hook
+		if c.helpHooks != nil && c.helpHooks.PostHelp != nil {
+			c.helpHooks.PostHelp(c, false)
+		}
+
 		return &helpInvokedError{output: output, exitCode: 0, useStdout: true}
 	}
 
@@ -215,6 +200,54 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 				}
 			}
 			i++
+		}
+	}
+
+	// Check for help flags after parsing (only if helpEnabled is true)
+	if c.helpEnabled {
+		for _, arg := range args {
+			if arg == "--help" {
+				// Call pre-help hook
+				if c.helpHooks != nil && c.helpHooks.PreHelp != nil {
+					c.helpHooks.PreHelp(c, true)
+				}
+
+				var output string
+				if c.customUsage != nil {
+					c.customUsage(true) // Long help
+					output = ""         // Custom usage handles output directly
+				} else {
+					output = c.GenerateLongUsage()
+				}
+
+				// Call post-help hook
+				if c.helpHooks != nil && c.helpHooks.PostHelp != nil {
+					c.helpHooks.PostHelp(c, true)
+				}
+
+				return &helpInvokedError{output: output, exitCode: 0, useStdout: true}
+			}
+			if arg == "-h" {
+				// Call pre-help hook
+				if c.helpHooks != nil && c.helpHooks.PreHelp != nil {
+					c.helpHooks.PreHelp(c, false)
+				}
+
+				var output string
+				if c.customUsage != nil {
+					c.customUsage(false)
+					output = "" // Custom usage handles output directly
+				} else {
+					output = c.GenerateShortUsage()
+				}
+
+				// Call post-help hook
+				if c.helpHooks != nil && c.helpHooks.PostHelp != nil {
+					c.helpHooks.PostHelp(c, false)
+				}
+
+				return &helpInvokedError{output: output, exitCode: 0, useStdout: true}
+			}
 		}
 	}
 

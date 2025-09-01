@@ -20,6 +20,11 @@ func DefaultUsageHeaders() UsageHeaders {
 	}
 }
 
+type HelpHooks struct {
+	PreHelp  func(cmd *Cmd, isLongHelp bool) // Called before help generation
+	PostHelp func(cmd *Cmd, isLongHelp bool) // Called after help generation
+}
+
 type Cmd struct {
 	name                  string
 	description           string
@@ -35,6 +40,7 @@ type Cmd struct {
 
 	// options
 	customUsage          func(bool)    // if set, this function will be called to print usage instead of the default
+	helpHooks            *HelpHooks    // if set, hooks will be called before/after help generation
 	helpEnabled          bool          // default true automatically adds a help flag
 	excludeNameFromUsage bool          // if true, this command will not be included in usage output
 	autoHelpOnNoArgs     bool          // if true, show help when no args provided and required args exist
@@ -72,6 +78,11 @@ func (c *Cmd) SetDescription(desc string) *Cmd {
 
 func (c *Cmd) SetCustomUsage(fn func(isLongHelp bool)) *Cmd {
 	c.customUsage = fn
+	return c
+}
+
+func (c *Cmd) SetHelpHooks(hooks *HelpHooks) *Cmd {
+	c.helpHooks = hooks
 	return c
 }
 

@@ -511,6 +511,48 @@ func Test_ErrorMessages_Format(t *testing.T) {
 	assert.Equal(t, "Invalid args: 'file' excludes 'url', but 'url' was set", err.Error())
 }
 
+func Test_MutualExclusionDeterministicOrdering(t *testing.T) {
+	// Test that mutual exclusion error messages are deterministic based on registration order
+	// When flags A and B mutually exclude each other, the error should reference
+	// whichever flag was registered first as the "excluder"
+
+	// Case 1: file registered first, url second
+	fs1 := NewCmd("test1")
+	_, err := NewString("file").SetExcludes([]string{"url"}).Register(fs1)
+	assert.NoError(t, err)
+	_, err = NewString("url").SetExcludes([]string{"file"}).Register(fs1)
+	assert.NoError(t, err)
+
+	err = fs1.ParseOrError([]string{"--file", "test.txt", "--url", "http://example.com"})
+	assert.NotNil(t, err)
+	assert.Equal(t, "Invalid args: 'file' excludes 'url', but 'url' was set", err.Error())
+
+	// Case 2: url registered first, file second - should get "url excludes file" error
+	fs2 := NewCmd("test2")
+	_, err = NewString("url").SetExcludes([]string{"file"}).Register(fs2)
+	assert.NoError(t, err)
+	_, err = NewString("file").SetExcludes([]string{"url"}).Register(fs2)
+	assert.NoError(t, err)
+
+	err = fs2.ParseOrError([]string{"--file", "test.txt", "--url", "http://example.com"})
+	assert.NotNil(t, err)
+	assert.Equal(t, "Invalid args: 'url' excludes 'file', but 'file' was set", err.Error())
+
+	// Test the deterministic behavior multiple times to ensure consistency
+	// "first" is registered first, so it should be the excluder
+	for i := 0; i < 3; i++ {
+		fs3 := NewCmd("test3")
+		_, err = NewString("first").SetExcludes([]string{"second"}).Register(fs3)
+		assert.NoError(t, err)
+		_, err = NewString("second").SetExcludes([]string{"first"}).Register(fs3)
+		assert.NoError(t, err)
+
+		err = fs3.ParseOrError([]string{"--first", "value1", "--second", "value2"})
+		assert.NotNil(t, err)
+		assert.Equal(t, "Invalid args: 'first' excludes 'second', but 'second' was set", err.Error())
+	}
+}
+
 func Test_RequiresWithDefaults_Scenario(t *testing.T) {
 	fs := NewCmd("test")
 

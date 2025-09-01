@@ -1051,10 +1051,26 @@ func (c *Cmd) appendBoolSliceValue(f *BoolSliceFlag, value string) (int, error) 
 	}
 	return 2, nil
 }
+
+// getAllFlagsInRegistrationOrder returns all flag names in registration order
+// (positional flags first, then non-positional flags)
+func (c *Cmd) getAllFlagsInRegistrationOrder() []string {
+	allFlags := make([]string, 0, len(c.positional)+len(c.nonPositional))
+	allFlags = append(allFlags, c.positional...)
+	allFlags = append(allFlags, c.nonPositional...)
+	return allFlags
+}
+
 func (c *Cmd) validateRequired() error {
 	// First pass: Check relational constraints (requires/excludes)
 	// These are more specific and should take precedence over generic "required flag missing" errors
-	for name, flag := range c.flags {
+	// Iterate in registration order to ensure deterministic error messages
+	for _, name := range c.getAllFlagsInRegistrationOrder() {
+		flag, exists := c.flags[name]
+		if !exists {
+			continue
+		}
+
 		// Check requires constraints for flags that are configured for relational constraints
 		if c.flagConfiguredForRelationalConstraints(name) {
 			var requires *[]string
@@ -1252,8 +1268,13 @@ func (c *Cmd) checkExclusion(flagName string) error {
 	}
 
 	// Check if any other configured flag excludes this flag
-	for otherName, otherFlag := range c.flags {
+	for _, otherName := range c.getAllFlagsInRegistrationOrder() {
 		if otherName == flagName || !c.flagConfiguredForRelationalConstraints(otherName) {
+			continue
+		}
+
+		otherFlag, exists := c.flags[otherName]
+		if !exists {
 			continue
 		}
 

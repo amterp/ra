@@ -725,11 +725,13 @@ func (c *Cmd) getConstraintString(flag any) string {
 		parts = append(parts, "Range: "+rangeStr)
 	}
 
-	// Add enum or regex constraints (regex takes priority if both exist)
+	// Add enum and regex constraints (both can be present)
+	if enumStr := c.getEnumString(flag); enumStr != "" {
+		parts = append(parts, "Valid values: "+enumStr)
+	}
+
 	if regexStr := c.getRegexString(flag); regexStr != "" {
 		parts = append(parts, "Regex: "+regexStr)
-	} else if enumStr := c.getEnumString(flag); enumStr != "" {
-		parts = append(parts, "Valid values: "+enumStr)
 	}
 
 	// Add default value

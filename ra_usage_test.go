@@ -851,7 +851,7 @@ func Test_Usage_ComplexRelationshipsAndConstraints(t *testing.T) {
 	cmd := NewCmd("complex")
 	cmd.SetDescription("Complex example with all constraint types")
 
-	// String with regex and enum (should show regex since it's more specific)
+	// String with regex and enum (should show both constraints)
 	mode, err := NewString("mode").
 		SetUsage("Operation mode").
 		SetRegexConstraint(regexp.MustCompile(`^(dev|prod|test)$`)).
@@ -914,7 +914,7 @@ Usage:
   complex <mode> [rate] [config-files...] [OPTIONS]
 
 Arguments:
-      --mode str                 Operation mode Regex: ^(dev|prod|test)$
+      --mode str                 Operation mode Valid values: [dev, prod, test]. Regex: ^(dev|prod|test)$
       --rate float               Processing rate Range: (0, 1). (default 0.5)
       --config-files [strs...]   Configuration files Separator: ":". Requires: mode
   -v, --verbose                  Verbose output Requires: mode. Excludes: quiet, silent
@@ -1668,4 +1668,30 @@ func Test_IndividualUsageChunks_CustomHeaders(t *testing.T) {
 
 	commandsSection := cmd.GenerateCommandsSection(false)
 	assert.Contains(t, commandsSection, "Available commands:")
+}
+
+func Test_Usage_RequiredArgWithEnumAndRegexConstraints(t *testing.T) {
+	cmd := NewCmd("test")
+	cmd.SetDescription("Test required arg with enum and regex constraints")
+
+	// Required argument with both enum and regex constraints
+	_, err := NewString("name").
+		SetRegexConstraint(regexp.MustCompile(`^[A-Z][a-z]*$`)).
+		SetEnumConstraint([]string{"Alice", "Bob"}).
+		Register(cmd)
+	assert.NoError(t, err)
+
+	usage := cmd.GenerateUsage(false)
+
+	// Should show enum values first, then regex pattern
+	expected := `Test required arg with enum and regex constraints
+
+Usage:
+  test <name> [OPTIONS]
+
+Arguments:
+      --name str   Valid values: [Alice, Bob]. Regex: ^[A-Z][a-z]*$
+`
+
+	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
 }

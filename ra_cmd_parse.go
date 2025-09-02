@@ -49,6 +49,12 @@ func (c *Cmd) ParseOrExit(args []string, opts ...ParseOpt) {
 
 func (c *Cmd) ParseOrError(args []string, opts ...ParseOpt) error {
 	err := c.parse(args, opts...)
+
+	// Call PostParse hook after parsing, before any output (success or error)
+	if c.parseHooks != nil && c.parseHooks.PostParse != nil {
+		c.parseHooks.PostParse(c, err)
+	}
+
 	if err != nil {
 		// Convert internal help error to public constant
 		if _, ok := err.(*helpInvokedError); ok {
@@ -95,22 +101,12 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 
 	// Check for auto-help: if enabled, no args provided, and command has required flags
 	if c.autoHelpOnNoArgs && len(args) == 0 && c.hasRequiredFlags() {
-		// Call pre-help hook
-		if c.helpHooks != nil && c.helpHooks.PreHelp != nil {
-			c.helpHooks.PreHelp(c, false) // Use short help (false) for auto-help
-		}
-
 		var output string
 		if c.customUsage != nil {
 			c.customUsage(false) // Use short help (false) for auto-help
 			output = ""          // Custom usage handles output directly
 		} else {
 			output = c.GenerateShortUsage()
-		}
-
-		// Call post-help hook
-		if c.helpHooks != nil && c.helpHooks.PostHelp != nil {
-			c.helpHooks.PostHelp(c, false)
 		}
 
 		return &helpInvokedError{output: output, exitCode: 0, useStdout: true}
@@ -207,11 +203,6 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 	if c.helpEnabled {
 		for _, arg := range args {
 			if arg == "--help" {
-				// Call pre-help hook
-				if c.helpHooks != nil && c.helpHooks.PreHelp != nil {
-					c.helpHooks.PreHelp(c, true)
-				}
-
 				var output string
 				if c.customUsage != nil {
 					c.customUsage(true) // Long help
@@ -220,30 +211,15 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 					output = c.GenerateLongUsage()
 				}
 
-				// Call post-help hook
-				if c.helpHooks != nil && c.helpHooks.PostHelp != nil {
-					c.helpHooks.PostHelp(c, true)
-				}
-
 				return &helpInvokedError{output: output, exitCode: 0, useStdout: true}
 			}
 			if arg == "-h" {
-				// Call pre-help hook
-				if c.helpHooks != nil && c.helpHooks.PreHelp != nil {
-					c.helpHooks.PreHelp(c, false)
-				}
-
 				var output string
 				if c.customUsage != nil {
 					c.customUsage(false)
 					output = "" // Custom usage handles output directly
 				} else {
 					output = c.GenerateShortUsage()
-				}
-
-				// Call post-help hook
-				if c.helpHooks != nil && c.helpHooks.PostHelp != nil {
-					c.helpHooks.PostHelp(c, false)
 				}
 
 				return &helpInvokedError{output: output, exitCode: 0, useStdout: true}

@@ -2,6 +2,7 @@ package ra
 
 import (
 	"bytes"
+	"errors"
 	"regexp"
 	"strings"
 	"sync"
@@ -3649,12 +3650,11 @@ func Test_FlagsProcessedBeforeHelp(t *testing.T) {
 	assert.Equal(t, "never", *colorFlag, "Flag should be processed even when help is requested")
 }
 
-func Test_HelpHooks(t *testing.T) {
-	// Test that pre/post hooks are called correctly
-	var preHelpCalled bool
-	var postHelpCalled bool
-	var preHelpIsLongHelp bool
-	var postHelpIsLongHelp bool
+func Test_ParseHooks(t *testing.T) {
+	// Test that PostParse hook is called correctly
+	var postParseCalled bool
+	var hookErr error
+	var hookColorValue string
 
 	cmd := NewCmd("test")
 	colorFlag, err := NewString("color").
@@ -3663,32 +3663,27 @@ func Test_HelpHooks(t *testing.T) {
 		Register(cmd)
 	assert.NoError(t, err)
 
-	cmd.SetHelpHooks(&HelpHooks{
-		PreHelp: func(c *Cmd, isLongHelp bool) {
-			preHelpCalled = true
-			preHelpIsLongHelp = isLongHelp
-
-			// Verify that flags are available in pre-hook
-			assert.Equal(t, "never", *colorFlag)
-		},
-		PostHelp: func(c *Cmd, isLongHelp bool) {
-			postHelpCalled = true
-			postHelpIsLongHelp = isLongHelp
+	cmd.SetParseHooks(&ParseHooks{
+		PostParse: func(c *Cmd, err error) {
+			postParseCalled = true
+			hookErr = err
+			// Verify that flags are available in hook
+			hookColorValue = *colorFlag
 		},
 	})
 
-	// Test with short help (-h)
-	err = cmd.ParseOrError([]string{"--color", "never", "-h"})
-	assert.Equal(t, HelpInvokedErr, err)
+	// Test with normal parsing (no help)
+	err = cmd.ParseOrError([]string{"--color", "never"})
+	assert.NoError(t, err)
 
-	assert.True(t, preHelpCalled, "PreHelp hook should be called")
-	assert.True(t, postHelpCalled, "PostHelp hook should be called")
-	assert.False(t, preHelpIsLongHelp, "Short help should pass false to hooks")
-	assert.False(t, postHelpIsLongHelp, "Short help should pass false to hooks")
+	assert.True(t, postParseCalled, "PostParse hook should be called")
+	assert.NoError(t, hookErr, "Hook should receive no error for successful parse")
+	assert.Equal(t, "never", hookColorValue, "Hook should have access to parsed flag values")
 
-	// Reset for long help test
-	preHelpCalled = false
-	postHelpCalled = false
+	// Reset for help test
+	postParseCalled = false
+	hookErr = nil
+	hookColorValue = ""
 
 	cmd = NewCmd("test")
 	colorFlag, err = NewString("color").
@@ -3697,23 +3692,48 @@ func Test_HelpHooks(t *testing.T) {
 		Register(cmd)
 	assert.NoError(t, err)
 
-	cmd.SetHelpHooks(&HelpHooks{
-		PreHelp: func(c *Cmd, isLongHelp bool) {
-			preHelpCalled = true
-			preHelpIsLongHelp = isLongHelp
-		},
-		PostHelp: func(c *Cmd, isLongHelp bool) {
-			postHelpCalled = true
-			postHelpIsLongHelp = isLongHelp
+	cmd.SetParseHooks(&ParseHooks{
+		PostParse: func(c *Cmd, err error) {
+			postParseCalled = true
+			hookErr = err
+			hookColorValue = *colorFlag
+			// Example use case: apply color settings before help generation
+			if *colorFlag == "never" {
+				// This would set color.NoColor = true in a real scenario
+			}
 		},
 	})
 
-	// Test with long help (--help)
-	err = cmd.ParseOrError([]string{"--color", "never", "--help"})
+	// Test with help flag - hook should still be called before help generation
+	err = cmd.ParseOrError([]string{"--color", "never", "-h"})
 	assert.Equal(t, HelpInvokedErr, err)
 
-	assert.True(t, preHelpCalled, "PreHelp hook should be called")
-	assert.True(t, postHelpCalled, "PostHelp hook should be called")
-	assert.True(t, preHelpIsLongHelp, "Long help should pass true to hooks")
-	assert.True(t, postHelpIsLongHelp, "Long help should pass true to hooks")
+	assert.True(t, postParseCalled, "PostParse hook should be called before help generation")
+	assert.Error(t, hookErr, "Hook should receive an error when help is invoked")
+	assert.True(t, errors.Is(hookErr, HelpInvokedErr), "Hook should receive help error")
+	assert.Equal(t, "never", hookColorValue, "Hook should have access to parsed flags before help")
+
+	// Test with long help as well
+	postParseCalled = false
+	hookColorValue = ""
+
+	cmd = NewCmd("test")
+	colorFlag, err = NewString("color").
+		SetUsage("Control output colorization").
+		SetDefault("auto").
+		Register(cmd)
+	assert.NoError(t, err)
+
+	cmd.SetParseHooks(&ParseHooks{
+		PostParse: func(c *Cmd, err error) {
+			postParseCalled = true
+			hookColorValue = *colorFlag
+		},
+	})
+
+	err = cmd.ParseOrError([]string{"--color", "always", "--help"})
+	assert.Equal(t, HelpInvokedErr, err)
+
+	assert.True(t, postParseCalled, "PostParse hook should be called before long help generation")
+	assert.Equal(t, "always", hookColorValue, "Hook should have access to parsed flags before long help")
 }

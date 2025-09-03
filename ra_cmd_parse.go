@@ -28,6 +28,12 @@ func (e *helpInvokedError) Unwrap() error {
 
 func (c *Cmd) ParseOrExit(args []string, opts ...ParseOpt) {
 	err := c.parse(args, opts...)
+
+	// Call PostParse hook after parsing, before any output (success or error)
+	if c.parseHooks != nil && c.parseHooks.PostParse != nil {
+		c.parseHooks.PostParse(c, err)
+	}
+
 	if err != nil {
 		// Check if this is a help invoked error
 		if helpErr, ok := err.(*helpInvokedError); ok {
@@ -41,7 +47,8 @@ func (c *Cmd) ParseOrExit(args []string, opts ...ParseOpt) {
 		} else {
 			// Regular error - show error message and usage
 			fmt.Fprintln(stderrWriter, err.Error())
-			fmt.Fprintln(stderrWriter, c.GenerateLongUsage())
+			fmt.Fprintln(stderrWriter)
+			fmt.Fprint(stderrWriter, c.GenerateLongUsage())
 			osExit(1)
 		}
 	}
@@ -92,6 +99,10 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 				SetOptional(true).
 				Register(c, WithGlobal(true))
 		}
+	}
+
+	if err := c.validateBeforeParsing(); err != nil {
+		return err
 	}
 
 	// Set defaults first
@@ -1070,6 +1081,86 @@ func (c *Cmd) getAllFlagsInRegistrationOrder() []string {
 	return allFlags
 }
 
+func (c *Cmd) validateBeforeParsing() error {
+	// Validate that all constraint references point to real arg names
+	return c.validateConstraintReferences()
+}
+
+func (c *Cmd) validateConstraintReferences() error {
+	// Get all valid flag names
+	validFlags := make(map[string]bool)
+	for name := range c.flags {
+		validFlags[name] = true
+	}
+
+	// Check all requires/excludes constraints
+	for flagName, flag := range c.flags {
+		var requires *[]string
+		var excludes *[]string
+
+		switch f := flag.(type) {
+		case *StringFlag:
+			requires = f.Requires
+			excludes = f.Excludes
+		case *IntFlag:
+			requires = f.Requires
+			excludes = f.Excludes
+		case *Int64Flag:
+			requires = f.Requires
+			excludes = f.Excludes
+		case *Float64Flag:
+			requires = f.Requires
+			excludes = f.Excludes
+		case *BoolFlag:
+			requires = f.Requires
+			excludes = f.Excludes
+		case *StringSliceFlag:
+			requires = f.Requires
+			excludes = f.Excludes
+		case *IntSliceFlag:
+			requires = f.Requires
+			excludes = f.Excludes
+		case *Int64SliceFlag:
+			requires = f.Requires
+			excludes = f.Excludes
+		case *Float64SliceFlag:
+			requires = f.Requires
+			excludes = f.Excludes
+		case *BoolSliceFlag:
+			requires = f.Requires
+			excludes = f.Excludes
+		}
+
+		// Validate requires constraints
+		if requires != nil {
+			for _, reqName := range *requires {
+				if !validFlags[reqName] {
+					return fmt.Errorf(
+						"constraint validation error: flag '%s' has requires constraint referencing undefined flag '%s'",
+						flagName,
+						reqName,
+					)
+				}
+			}
+		}
+
+		// Validate excludes constraints
+		if excludes != nil {
+			for _, excName := range *excludes {
+				if !validFlags[excName] {
+					return fmt.Errorf(
+						"constraint validation error: flag '%s' has excludes constraint referencing undefined flag '%s'",
+						flagName,
+						excName,
+					)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 func (c *Cmd) validateRequired() error {
 	// First pass: Check relational constraints (requires/excludes)
 	// These are more specific and should take precedence over generic "required flag missing" errors
@@ -1108,6 +1199,10 @@ func (c *Cmd) validateRequired() error {
 
 			if requires != nil {
 				for _, req := range *requires {
+					// Check if the referenced flag exists
+					if _, exists := c.flags[req]; !exists {
+						return fmt.Errorf("Undefined arg '%s'", req)
+					}
 					if !c.flagConfiguredForRelationalConstraints(req) {
 						return fmt.Errorf("Invalid args: '%s' requires '%s', but '%s' was not set", name, req, req)
 					}
@@ -1264,6 +1359,10 @@ func (c *Cmd) checkExclusion(flagName string) error {
 
 		if excludes != nil {
 			for _, excluded := range *excludes {
+				// Check if the referenced flag exists
+				if _, exists := c.flags[excluded]; !exists {
+					return fmt.Errorf("Undefined arg '%s'", excluded)
+				}
 				if c.flagConfiguredForRelationalConstraints(excluded) {
 					return fmt.Errorf(
 						"Invalid args: '%s' excludes '%s', but '%s' was set",

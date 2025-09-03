@@ -1254,7 +1254,7 @@ Arguments:
 
 Global options:
   -d, --debug           Enables debug output. Intended for Rad script developers.
-      --color str       Control output colorization. Valid values: [auto, always, never]. (default auto)
+      --color str       Control output colorization. Valid values: [auto, always, never] (default auto)
   -q, --quiet           Suppresses some output.
       --confirm-shell   Confirm all shell commands before running them.
       --src str         (optional) Instead of running the target script, just print it out

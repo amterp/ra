@@ -273,7 +273,7 @@ Usage:
 
 Arguments:
   -c, --config str    Configuration file path. (default /etc/myapp.conf)
-      --timeout int   Request timeout in seconds. Range: [1, 300]. (default 30)
+      --timeout int   Request timeout in seconds. Range: [1, 300] (default 30)
   -v, --verbose       Enable verbose output.
 `
 
@@ -330,8 +330,8 @@ Usage:
 Arguments:
   input-file str     Path to input file
   output-dir str     (optional) Output directory
-  -f, --format str   Output format Valid values: [json, yaml, xml]. (default json)
-  -j, --jobs int     Number of concurrent jobs Range: [1, 16)
+  -f, --format str   Output format. Valid values: [json, yaml, xml] (default json)
+  -j, --jobs int     Number of concurrent jobs. Range: [1, 16)
 `
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
@@ -412,7 +412,7 @@ Commands:
   commit                        Record changes to the repository
 
 Arguments:
-      --config str   Path to config file (default ~/.gitlike/config)
+      --config str   Path to config file. (default ~/.gitlike/config)
   -v, --verbose      Enable verbose output
 `
 
@@ -462,7 +462,7 @@ Usage:
 
 Arguments:
   files [strs...]   Files to add
-  -A, --all         Add all modified files Excludes: force
+  -A, --all         Add all modified files. Excludes: force
   -f, --force       Force add ignored files
 `
 
@@ -550,14 +550,14 @@ Usage:
   complex [port] <rate> <retries> [format] <name> <tags> [OPTIONS]
 
 Arguments:
-  -p, --port int      Server port Range: [1024, 65535]. (default 8080)
-      --rate float    Processing rate Range: (0, 100]
-      --retries int   Number of retries Range: [0, )
-      --format str    Output format Valid values: [json, yaml, xml, csv]. (default json)
-      --name str      Resource name Regex: ^[a-zA-Z][a-zA-Z0-9_-]*$
-      --tags strs     Resource tags Separator: "|". Requires: name
-      --debug         Enable debug mode Excludes: quiet, silent
-  -q, --quiet         Suppress output Excludes: debug, verbose
+  -p, --port int      Server port. Range: [1024, 65535] (default 8080)
+      --rate float    Processing rate. Range: (0, 100]
+      --retries int   Number of retries. Range: [0, )
+      --format str    Output format. Valid values: [json, yaml, xml, csv] (default json)
+      --name str      Resource name. Regex: ^[a-zA-Z][a-zA-Z0-9_-]*$
+      --tags strs     Resource tags. Separator: "|". Requires: name
+      --debug         Enable debug mode. Excludes: quiet, silent
+  -q, --quiet         Suppress output. Excludes: debug, verbose
 `
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
@@ -618,10 +618,10 @@ Usage:
 
 Arguments:
   app-name str        Application name
-  environment str     (optional) Target environment (default staging)
-      --timeout int   Deployment timeout Range: [30, ). (default 300)
+  environment str     (optional) Target environment. (default staging)
+      --timeout int   Deployment timeout. Range: [30, ) (default 300)
   -f, --force         Force deployment even if checks fail
-      --no-rollback   Disable automatic rollback on failure Excludes: force
+      --no-rollback   Disable automatic rollback on failure. Excludes: force
 `
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
@@ -729,7 +729,7 @@ Arguments:
 
 Global options:
   -v, --verbose         Enable verbose output
-      --log-level str   Set log level (default info)
+      --log-level str   Set log level. (default info)
 `
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
@@ -841,7 +841,7 @@ Arguments:
   files [strs...]           Input files
       --tags [strs...]      Resource tags
       --include [strs...]   Include patterns
-      --ports ints          Port numbers Separator: ","
+      --ports ints          Port numbers. Separator: ","
 `
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
@@ -914,12 +914,12 @@ Usage:
   complex <mode> [rate] [config-files...] [OPTIONS]
 
 Arguments:
-      --mode str                 Operation mode Valid values: [dev, prod, test]. Regex: ^(dev|prod|test)$
-      --rate float               Processing rate Range: (0, 1). (default 0.5)
-      --config-files [strs...]   Configuration files Separator: ":". Requires: mode
-  -v, --verbose                  Verbose output Requires: mode. Excludes: quiet, silent
-  -q, --quiet                    Quiet mode Excludes: verbose
-      --silent                   Silent mode Excludes: verbose
+      --mode str                 Operation mode. Valid values: [dev, prod, test]. Regex: ^(dev|prod|test)$
+      --rate float               Processing rate. Range: (0, 1) (default 0.5)
+      --config-files [strs...]   Configuration files. Separator: ":". Requires: mode
+  -v, --verbose                  Verbose output. Requires: mode. Excludes: quiet, silent
+  -q, --quiet                    Quiet mode. Excludes: verbose
+      --silent                   Silent mode. Excludes: verbose
 `
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
@@ -1019,7 +1019,7 @@ Usage:
 Arguments:
       --required str       Required flag
       --optional str       (optional) Optional flag
-      --with-default str   Flag with default (default defaultval)`
+      --with-default str   Flag with default. (default defaultval)`
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
 }
@@ -1691,6 +1691,33 @@ Usage:
 
 Arguments:
       --name str   Valid values: [Alice, Bob]. Regex: ^[A-Z][a-z]*$
+`
+
+	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
+}
+
+func Test_Usage_StringFlagWithDefaultAndEnumConstraints_OrderingBehavior(t *testing.T) {
+	cmd := NewCmd("test")
+	cmd.SetDescription("Test ordering of default and enum constraints")
+
+	// String flag with both default and enum constraints to confirm current behavior
+	_, err := NewString("color").
+		SetUsage("Control output colorization").
+		SetDefault("auto").
+		SetEnumConstraint([]string{"auto", "always", "never"}).
+		Register(cmd)
+	assert.NoError(t, err)
+
+	usage := cmd.GenerateUsage(false)
+
+	// Expected behavior: enum first, then default
+	expected := `Test ordering of default and enum constraints
+
+Usage:
+  test [color] [OPTIONS]
+
+Arguments:
+      --color str   Control output colorization. Valid values: [auto, always, never] (default auto)
 `
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))

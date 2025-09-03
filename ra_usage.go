@@ -650,15 +650,27 @@ func (c *Cmd) formatFlags(flags []any, isLongHelp bool) string {
 
 			// Add usage text if it exists
 			if hasUsage {
-				sb.WriteString(base.Usage)
+				usage := base.Usage
+				sb.WriteString(usage)
+				// Add period after usage text if there are constraints and usage doesn't end with period
+				if hasConstraints {
+					if !strings.HasSuffix(usage, ".") {
+						sb.WriteString(". ")
+					} else {
+						sb.WriteString(" ")
+					}
+				}
 			}
 
 			// Add constraints (including defaults)
 			if hasConstraints {
-				if hasUsage {
-					sb.WriteString(" ")
+				if !hasUsage {
+					// If no usage text, don't add extra space
+					sb.WriteString(constraints)
+				} else {
+					// Usage text already added period and space above
+					sb.WriteString(constraints)
 				}
-				sb.WriteString(constraints)
 			}
 		}
 		sb.WriteString("\n")
@@ -734,11 +746,6 @@ func (c *Cmd) getConstraintString(flag any) string {
 		parts = append(parts, "Regex: "+regexStr)
 	}
 
-	// Add default value
-	if defaultStr := c.getDefaultString(flag); defaultStr != "" {
-		parts = append(parts, fmt.Sprintf("(default %s)", defaultStr))
-	}
-
 	// Add separator for slices
 	if sepStr := c.getSeparatorString(flag); sepStr != "" {
 		parts = append(parts, "Separator: "+sepStr)
@@ -753,7 +760,19 @@ func (c *Cmd) getConstraintString(flag any) string {
 		parts = append(parts, "Excludes: "+exclStr)
 	}
 
-	return strings.Join(parts, ". ")
+	// Join constraint parts with periods
+	constraintStr := strings.Join(parts, ". ")
+
+	// Add default value last (if present)
+	if defaultStr := c.getDefaultString(flag); defaultStr != "" {
+		if constraintStr != "" {
+			constraintStr += " " + fmt.Sprintf("(default %s)", defaultStr)
+		} else {
+			constraintStr = fmt.Sprintf("(default %s)", defaultStr)
+		}
+	}
+
+	return constraintStr
 }
 func (c *Cmd) getDefaultString(flag any) string {
 	switch f := flag.(type) {

@@ -2,9 +2,9 @@
 
 ![ra-logo](./media/ra.png)
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/amterp/ra)](https://goreportcard.com/report/github.com/amterp/ra)
+[![Latest Release](https://img.shields.io/github/v/release/amterp/ra?color=blue)](https://github.com/amterp/ra/releases)
 [![Go Reference](https://pkg.go.dev/badge/github.com/amterp/ra.svg)](https://pkg.go.dev/github.com/amterp/ra)
-[![Latest Release](https://img.shields.io/github/v/release/amterp/ra)](https://github.com/amterp/ra/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/amterp/ra)](https://goreportcard.com/report/github.com/amterp/ra)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Flexible CLI argument parsing for Go.** Ra lets you build sophisticated command-line tools where arguments work as
@@ -59,15 +59,28 @@ myapp --input data.txt --format json -v  # flag style
 
 ## Why Ra?
 
-**vs cobra/pflag:** While cobra and pflag are excellent for traditional flag-based CLIs, Ra's dual-nature arguments provide more flexibility. In cobra, you have to choose between positional args OR flags - Ra lets you have both. Ra also provides richer constraint validation and doesn't impose POSIX compliance patterns.
+**vs cobra/pflag:** While cobra and pflag are excellent for traditional flag-based CLIs,
+Ra's dual-nature arguments provide more flexibility.
+In cobra, you have to choose between positional args OR flags - Ra lets you have both.
 
-**Key strengths:**
-- **POSIX-friendly, but not prescriptive** - you choose your parsing style, Ra adapts
-- **Dual-nature arguments** - users can mix positional and flag styles naturally
-- **Built for complex CLIs** - designed for sophisticated argument handling
-- **Real-world battle-tested** - powers the Rad programming language's CLI
+```go
+// Cobra: Separate definitions for flags and positional args
+cmd.Flags().StringVarP(&input, "input", "i", "", "input file")
+cmd.Args = cobra.ExactArgs(1) // The positional arg is separate
 
-Perfect for CLIs that need more flexibility than basic flag parsing but less complexity than full frameworks.
+// Ra: A single declaration enables both styles  
+input, _ := ra.NewString("input").Register(cmd)
+// User can use `myapp file.txt` OR `myapp --input file.txt`
+```
+
+| Feature                 | Ra                                         | cobra/pflag                   |
+|-------------------------|--------------------------------------------|-------------------------------| 
+| **Argument Style**      | **Dual-nature** (flags & positional)       | Primarily flags-only          |
+| **POSIX Compliance**    | **Flexible** / Non-prescriptive            | Strict patterns               |
+| **Built-in Validation** | **Rich constraints** (enum, regex, ranges) | Basic type parsing            |
+| **Best For**            | **User-friendly CLIs** with flexible UX    | Traditional POSIX-style tools |
+
+**Perfect for CLIs that need more flexibility than basic flag parsing but less complexity than full frameworks.**
 
 ## Example
 
@@ -168,6 +181,30 @@ fileproc validate config.json --strict
 
 # Auto-generated help
 fileproc --help
+# Output:
+# A file processor with various output formats
+#
+# Usage:
+#   fileproc [validate] <input> [format] [timeout] [OPTIONS]
+#
+# Commands:
+#   validate
+#
+# Arguments:
+#       --input str         
+#   -f, --format str        Default: json. Valid values: [json, xml, yaml]
+#       --timeout int       Default: 30. Range: [1, 300]
+#   -v, --verbose           Excludes: quiet
+#   -q, --quiet             Excludes: verbose  
+#       --tags [strs...]    (optional)
+#   -h, --help              Print usage information
+
+# Constraint validation errors
+fileproc data.txt --format csv
+# Output: Error: Invalid 'format' value: csv (valid values: json, xml, yaml)
+
+fileproc data.txt --timeout 500  
+# Output: Error: 'timeout' value 500 is > maximum 300
 ```
 
 ## Documentation

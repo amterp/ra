@@ -21,20 +21,24 @@ if push or validate or release:
     $!`go test -count=100`
 
 if release:
+    push()
     $!`git tag -l | tail`
     version = get_version()
     $!`gh release create {version} --generate-notes --title "Release {version}"`
     $!`git fetch origin --tags`
 
 if push or force_push:
-    branch = get_branch()
-    $!`git push origin {branch} --tags`
+    push(branch)
 
 print(green("✅ Done!"))
 
+fn push():
+    branch = get_branch()
+    $!`git push origin {branch} --tags`
+
 fn get_branch():
     _, branch  = $!`echo -n $(git branch --show-current)`
-    return branch
+    return branch.trim()
 
 fn get_version() -> str:
     while:
@@ -42,4 +46,3 @@ fn get_version() -> str:
         if type_of(in) == "error" or not in.starts_with("v"):
             print("Invalid version, try again.".red())
         return in
-

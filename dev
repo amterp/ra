@@ -24,7 +24,7 @@ if release:
     $!`git tag -l | tail`
     version = get_version()
     $!`git tag {version}`
-    $!`gh release create {version} --generate-notes --title "Release {version}"`
+    $!`gh release create {version} --generate-notes --title "Release {version}" --target {version}`
     if not push:
         push = confirm("Push? [y/n] > ")
 

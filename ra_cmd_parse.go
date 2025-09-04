@@ -13,9 +13,12 @@ var HelpInvokedErr = errors.New("help invoked")
 
 // Internal error wrapper to carry exit code for ParseOrExit
 type helpInvokedError struct {
-	output    string // The usage text that was/would be output
-	exitCode  int    // The exit code (0 for help, 1 for error)
-	useStdout bool   // Whether to output to stdout (true for help requests) or stderr (false for errors)
+	output         string // The usage text that was/would be output (empty if not yet generated)
+	exitCode       int    // The exit code (0 for help, 1 for error)
+	useStdout      bool   // Whether to output to stdout (true for help requests) or stderr (false for errors)
+	isLongHelp     bool   // true for --help, false for -h or auto-help
+	isAutoHelp     bool   // true if triggered by auto-help (no args with required flags)
+	useCustomUsage bool   // true if custom usage function should be used
 }
 
 func (e *helpInvokedError) Error() string {
@@ -37,11 +40,28 @@ func (c *Cmd) ParseOrExit(args []string, opts ...ParseOpt) {
 	if err != nil {
 		// Check if this is a help invoked error
 		if helpErr, ok := err.(*helpInvokedError); ok {
-			// Route output to stdout for help requests, stderr for errors
-			if helpErr.useStdout {
-				fmt.Fprint(stdoutWriter, helpErr.output)
+			// Generate help output now, after PostParse hook has been called
+			var output string
+			if helpErr.useCustomUsage {
+				if c.customUsage != nil {
+					c.customUsage(helpErr.isLongHelp)
+					output = "" // Custom usage handles output directly
+				}
 			} else {
-				fmt.Fprint(stderrWriter, helpErr.output)
+				if helpErr.isLongHelp {
+					output = c.GenerateLongUsage()
+				} else {
+					output = c.GenerateShortUsage()
+				}
+			}
+
+			// Route output to stdout for help requests, stderr for errors
+			if output != "" {
+				if helpErr.useStdout {
+					fmt.Fprint(stdoutWriter, output)
+				} else {
+					fmt.Fprint(stderrWriter, output)
+				}
 			}
 			osExit(helpErr.exitCode)
 		} else {
@@ -63,8 +83,13 @@ func (c *Cmd) ParseOrError(args []string, opts ...ParseOpt) error {
 	}
 
 	if err != nil {
-		// Convert internal help error to public constant
-		if _, ok := err.(*helpInvokedError); ok {
+		// Check if this is a help invoked error
+		if helpErr, ok := err.(*helpInvokedError); ok {
+			// Call custom usage function if it exists, even though ParseOrError doesn't display output
+			// This maintains backward compatibility for custom usage functions that may have side effects
+			if helpErr.useCustomUsage && c.customUsage != nil {
+				c.customUsage(helpErr.isLongHelp)
+			}
 			return HelpInvokedErr
 		}
 	}
@@ -112,15 +137,14 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 
 	// Check for auto-help: if enabled, no args provided, and command has required flags
 	if c.autoHelpOnNoArgs && len(args) == 0 && c.hasRequiredFlags() {
-		var output string
-		if c.customUsage != nil {
-			c.customUsage(false) // Use short help (false) for auto-help
-			output = ""          // Custom usage handles output directly
-		} else {
-			output = c.GenerateShortUsage()
+		return &helpInvokedError{
+			output:         "", // Will be generated later, after PostParse hook
+			exitCode:       0,
+			useStdout:      true,
+			isLongHelp:     false, // Auto-help uses short help
+			isAutoHelp:     true,
+			useCustomUsage: c.customUsage != nil,
 		}
-
-		return &helpInvokedError{output: output, exitCode: 0, useStdout: true}
 	}
 
 	// Check if we have number shorts mode
@@ -214,26 +238,24 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 	if c.helpEnabled {
 		for _, arg := range args {
 			if arg == "--help" {
-				var output string
-				if c.customUsage != nil {
-					c.customUsage(true) // Long help
-					output = ""         // Custom usage handles output directly
-				} else {
-					output = c.GenerateLongUsage()
+				return &helpInvokedError{
+					output:         "", // Will be generated later, after PostParse hook
+					exitCode:       0,
+					useStdout:      true,
+					isLongHelp:     true,
+					isAutoHelp:     false,
+					useCustomUsage: c.customUsage != nil,
 				}
-
-				return &helpInvokedError{output: output, exitCode: 0, useStdout: true}
 			}
 			if arg == "-h" {
-				var output string
-				if c.customUsage != nil {
-					c.customUsage(false)
-					output = "" // Custom usage handles output directly
-				} else {
-					output = c.GenerateShortUsage()
+				return &helpInvokedError{
+					output:         "", // Will be generated later, after PostParse hook
+					exitCode:       0,
+					useStdout:      true,
+					isLongHelp:     false,
+					isAutoHelp:     false,
+					useCustomUsage: c.customUsage != nil,
 				}
-
-				return &helpInvokedError{output: output, exitCode: 0, useStdout: true}
 			}
 		}
 	}

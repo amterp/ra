@@ -62,7 +62,7 @@ myapp --input data.txt --format json -v  # flag style
 **vs cobra/pflag:** While cobra and pflag are excellent for traditional flag-based CLIs, Ra's dual-nature arguments provide more flexibility. In cobra, you have to choose between positional args OR flags - Ra lets you have both. Ra also provides richer constraint validation and doesn't impose POSIX compliance patterns.
 
 **Key strengths:**
-- **Non-prescriptive POSIX compliance** - you choose your parsing style, Ra adapts
+- **POSIX-friendly, but not prescriptive** - you choose your parsing style, Ra adapts
 - **Dual-nature arguments** - users can mix positional and flag styles naturally
 - **Built for complex CLIs** - designed for sophisticated argument handling
 - **Real-world battle-tested** - powers the Rad programming language's CLI

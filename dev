@@ -23,10 +23,8 @@ if push or validate or release:
 if release:
     $!`git tag -l | tail`
     version = get_version()
-    $!`git tag {version}`
     $!`gh release create {version} --generate-notes --title "Release {version}"`
-    if not push:
-        push = confirm("Push? [y/n] > ")
+    $!`git fetch origin --tags`
 
 if push or force_push:
     branch = get_branch()

@@ -29,6 +29,21 @@ func (e *helpInvokedError) Unwrap() error {
 	return HelpInvokedErr
 }
 
+// ProgrammingError wraps errors caused by incorrect library setup/configuration.
+// These are bugs in the code using Ra, not user input errors.
+type ProgrammingError struct {
+	msg string
+}
+
+func (e *ProgrammingError) Error() string {
+	return e.msg
+}
+
+// NewProgrammingError creates a new programming error
+func NewProgrammingError(msg string) *ProgrammingError {
+	return &ProgrammingError{msg: msg}
+}
+
 func (c *Cmd) ParseOrExit(args []string, opts ...ParseOpt) {
 	err := c.parse(args, opts...)
 
@@ -64,6 +79,10 @@ func (c *Cmd) ParseOrExit(args []string, opts ...ParseOpt) {
 				}
 			}
 			osExit(helpErr.exitCode)
+		} else if _, ok := err.(*ProgrammingError); ok {
+			// Programming error - show only error message (no usage)
+			fmt.Fprintln(stderrWriter, err.Error())
+			osExit(1)
 		} else {
 			// Regular error - show error message and usage
 			fmt.Fprintln(stderrWriter, err.Error())
@@ -488,7 +507,7 @@ func (c *Cmd) parseLongFlag(args []string, index int) (int, error) {
 		return c.parseBoolSliceFlag(args, index, f)
 	}
 
-	return 0, fmt.Errorf("unsupported flag type for: %s", flagName)
+	return 0, NewProgrammingError(fmt.Sprintf("unsupported flag type for: %s", flagName))
 }
 
 func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool) (int, error) {
@@ -1116,7 +1135,7 @@ func (c *Cmd) validateConstraintReferences() error {
 	}
 
 	// Check all requires/excludes constraints
-	for flagName, flag := range c.flags {
+	for _, flag := range c.flags {
 		var requires *[]string
 		var excludes *[]string
 
@@ -1157,11 +1176,7 @@ func (c *Cmd) validateConstraintReferences() error {
 		if requires != nil {
 			for _, reqName := range *requires {
 				if !validFlags[reqName] {
-					return fmt.Errorf(
-						"constraint validation error: flag '%s' has requires constraint referencing undefined flag '%s'",
-						flagName,
-						reqName,
-					)
+					return NewProgrammingError(fmt.Sprintf("Undefined flag '%s'", reqName))
 				}
 			}
 		}
@@ -1170,11 +1185,7 @@ func (c *Cmd) validateConstraintReferences() error {
 		if excludes != nil {
 			for _, excName := range *excludes {
 				if !validFlags[excName] {
-					return fmt.Errorf(
-						"constraint validation error: flag '%s' has excludes constraint referencing undefined flag '%s'",
-						flagName,
-						excName,
-					)
+					return NewProgrammingError(fmt.Sprintf("Undefined flag '%s'", excName))
 				}
 			}
 		}
@@ -1221,10 +1232,6 @@ func (c *Cmd) validateRequired() error {
 
 			if requires != nil {
 				for _, req := range *requires {
-					// Check if the referenced flag exists
-					if _, exists := c.flags[req]; !exists {
-						return fmt.Errorf("Undefined arg '%s'", req)
-					}
 					if !c.flagConfiguredForRelationalConstraints(req) {
 						return fmt.Errorf("Invalid args: '%s' requires '%s', but '%s' was not set", name, req, req)
 					}
@@ -1381,10 +1388,6 @@ func (c *Cmd) checkExclusion(flagName string) error {
 
 		if excludes != nil {
 			for _, excluded := range *excludes {
-				// Check if the referenced flag exists
-				if _, exists := c.flags[excluded]; !exists {
-					return fmt.Errorf("Undefined arg '%s'", excluded)
-				}
 				if c.flagConfiguredForRelationalConstraints(excluded) {
 					return fmt.Errorf(
 						"Invalid args: '%s' excludes '%s', but '%s' was set",

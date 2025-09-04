@@ -3737,3 +3737,57 @@ func Test_ParseHooks(t *testing.T) {
 	assert.True(t, postParseCalled, "PostParse hook should be called before long help generation")
 	assert.Equal(t, "always", hookColorValue, "Hook should have access to parsed flags before long help")
 }
+
+func Test_ParseOrExit_ProgrammingErrorNoUsage(t *testing.T) {
+	cleanup, exitCode, _, stderr := mockExit(t)
+	defer cleanup()
+
+	// This will panic because we mocked os.Exit
+	assert.PanicsWithValue(t, "os.Exit called", func() {
+		fs := NewCmd("test")
+
+		// Create a flag with a constraint referencing an undefined flag (programming error)
+		_, err := NewString("foo").SetRequires([]string{"nonexistent"}).Register(fs)
+		assert.NoError(t, err)
+
+		fs.ParseOrExit([]string{})
+	})
+
+	// Should exit with code 1 but NOT show usage
+	assert.Equal(t, 1, *exitCode)
+	stderrOutput := stderr.String()
+	assert.Contains(t, stderrOutput, "Undefined flag 'nonexistent'")
+	assert.NotContains(t, stderrOutput, "Usage:") // Programming errors should not show usage
+}
+
+func Test_ParseOrExit_UserErrorShowsUsage(t *testing.T) {
+	cleanup, exitCode, _, stderr := mockExit(t)
+	defer cleanup()
+
+	// This will panic because we mocked os.Exit
+	assert.PanicsWithValue(t, "os.Exit called", func() {
+		fs := NewCmd("test")
+		fs.ParseOrExit([]string{"--unknown-flag"})
+	})
+
+	// Should exit with code 1 and show usage for user input errors
+	assert.Equal(t, 1, *exitCode)
+	stderrOutput := stderr.String()
+	assert.Contains(t, stderrOutput, "unknown flag")
+	assert.Contains(t, stderrOutput, "Usage:") // User errors should show usage
+}
+
+func Test_ParseOrError_ProgrammingErrorType(t *testing.T) {
+	fs := NewCmd("test")
+
+	// Create a flag with a constraint referencing an undefined flag
+	_, err := NewString("foo").SetRequires([]string{"nonexistent"}).Register(fs)
+	assert.NoError(t, err)
+
+	err = fs.ParseOrError([]string{})
+
+	// Should return a programming error, not a regular error
+	var progErr *ProgrammingError
+	assert.True(t, errors.As(err, &progErr), "Should return a ProgrammingError type")
+	assert.Contains(t, err.Error(), "Undefined flag 'nonexistent'")
+}

@@ -210,12 +210,27 @@ For testability, the library uses interface-based dependency injection for exit 
 
 ### Error Types
 
-#### Regular Parsing Errors
+The library distinguishes between two categories of errors with different presentation:
+
+#### Programming Errors
+
+These are bugs in the code using the Ra library, not user input mistakes. They show **only the error message** (no usage):
+
+- **Constraint validation errors**: Constraints referencing undefined flags (e.g., `SetRequires([]string{"nonexistent"})`)
+- **Unsupported flag type errors**: Internal programming bugs where a new flag type wasn't fully implemented
+
+Programming errors return a `*ProgrammingError` type that can be detected with `errors.As()`.
+
+#### User Input Errors
+
+These are mistakes in command-line input by end users. They show **error message + usage**:
 
 - Unknown flag
 - Missing required flag value
 - Type conversion errors
 - Constraint violations (enum, regex, min/max)
+- Missing required arguments
+- Relational constraint violations (requires/excludes logic)
 
 #### Help Invoked Error
 A special exported error constant returned when help/usage is displayed:

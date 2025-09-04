@@ -7,17 +7,25 @@ args:
     force_push "force-push" P bool  # Enable to just push, no checks or anything.
     build b bool      # Enable to build.
     validate v bool   # Enable to build & test.
+    release r bool    # Release a new version.
 
 if build:
     $!`make build`
 
-if push or validate:
+if push or validate or release:
     $!`go mod tidy`
     $!`make all`
     $!`golines -w . -m 120`
     $!`go fmt`
     $!`go vet`
     $!`go test -count=100`
+
+if release:
+    $!`git tag -l | tail`
+    version = get_version()
+    $!`git tag {version}`
+    if not push:
+        push = confirm("Push? [y/n] > ")
 
 if push or force_push:
     branch = get_branch()
@@ -28,3 +36,11 @@ print(green("✅ Done!"))
 fn get_branch():
     _, branch  = $!`echo -n $(git branch --show-current)`
     return branch
+
+fn get_version() -> str:
+    while:
+        in = input(prompt="Enter version (e.g. v0.7.1): ")
+        if type_of(in) == "error" or not in.starts_with("v"):
+            print("Invalid version, try again.".red())
+        return in
+

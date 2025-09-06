@@ -3,8 +3,11 @@ package ra
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
+
+	"github.com/amterp/color"
 )
 
 // HelpInvokedErr is returned by ParseOrError when help is invoked (via -h, --help, or auto-help).
@@ -120,6 +123,8 @@ func (c *Cmd) parse(args []string, opts ...ParseOpt) error {
 }
 
 func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opts ...ParseOpt) error {
+	initializeColorFromEnv()
+
 	cfg := &parseCfg{}
 	for _, opt := range opts {
 		opt(cfg)
@@ -1120,6 +1125,21 @@ func (c *Cmd) getAllFlagsInRegistrationOrder() []string {
 	allFlags = append(allFlags, c.positional...)
 	allFlags = append(allFlags, c.nonPositional...)
 	return allFlags
+}
+
+func initializeColorFromEnv() {
+	colorValue := strings.ToLower(strings.TrimSpace(os.Getenv("RA_COLOR")))
+	switch colorValue {
+	case "never":
+		color.NoColor = true
+	case "always":
+		color.NoColor = false
+	case "", "auto":
+		// default behavior
+		// let amterp/color decide based on tty
+	default:
+		// invalid value - treat as auto
+	}
 }
 
 func (c *Cmd) validateBeforeParsing() error {

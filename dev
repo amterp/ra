@@ -21,18 +21,18 @@ if push or validate or release:
     $!`go test -count=100`
 
 if release:
-    push()
+    pushup()
     $!`git tag -l | tail`
     version = get_version()
     $!`gh release create {version} --generate-notes --title "Release {version}"`
     $!`git fetch origin --tags`
 
 if push or force_push:
-    push(branch)
+    pushup()
 
 print(green("✅ Done!"))
 
-fn push():
+fn pushup():
     branch = get_branch()
     $!`git push origin {branch} --tags`
 

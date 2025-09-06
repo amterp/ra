@@ -14,6 +14,10 @@ import (
 // Users can compare against this constant to detect when help was shown instead of a parsing error.
 var HelpInvokedErr = errors.New("help invoked")
 
+// DumpInvokedErr is returned by ParseOrError when dump is invoked (via WithDump(true)).
+// Users can compare against this constant to detect when dump was shown instead of parsing.
+var DumpInvokedErr = errors.New("dump invoked")
+
 // Internal error wrapper to carry exit code for ParseOrExit
 type helpInvokedError struct {
 	output         string // The usage text that was/would be output (empty if not yet generated)
@@ -30,6 +34,20 @@ func (e *helpInvokedError) Error() string {
 
 func (e *helpInvokedError) Unwrap() error {
 	return HelpInvokedErr
+}
+
+// Internal error wrapper for dump invocation
+type dumpInvokedError struct {
+	output   string // The dump output (empty if not yet generated)
+	exitCode int    // The exit code (0 for successful dump)
+}
+
+func (e *dumpInvokedError) Error() string {
+	return DumpInvokedErr.Error()
+}
+
+func (e *dumpInvokedError) Unwrap() error {
+	return DumpInvokedErr
 }
 
 // ProgrammingError wraps errors caused by incorrect library setup/configuration.
@@ -82,6 +100,13 @@ func (c *Cmd) ParseOrExit(args []string, opts ...ParseOpt) {
 				}
 			}
 			osExit(helpErr.exitCode)
+		} else if dumpErr, ok := err.(*dumpInvokedError); ok {
+			// Generate dump output now, after PostParse hook has been called
+			output := c.generateDump(args, opts...)
+			if output != "" {
+				fmt.Fprint(stdoutWriter, output)
+			}
+			osExit(dumpErr.exitCode)
 		} else if _, ok := err.(*ProgrammingError); ok {
 			// Programming error - show only error message (no usage)
 			fmt.Fprintln(stderrWriter, err.Error())
@@ -113,6 +138,9 @@ func (c *Cmd) ParseOrError(args []string, opts ...ParseOpt) error {
 				c.customUsage(helpErr.isLongHelp)
 			}
 			return HelpInvokedErr
+		} else if _, ok := err.(*dumpInvokedError); ok {
+			// Dump was invoked - ParseOrError doesn't display output, but we return the standard error
+			return DumpInvokedErr
 		}
 	}
 	return err
@@ -157,6 +185,14 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 	// Set defaults first
 	if err := c.setDefaults(); err != nil {
 		return err
+	}
+
+	// Check for dump mode - if enabled, generate dump output and return
+	if cfg.dump {
+		return &dumpInvokedError{
+			output:   "", // Will be generated later, after PostParse hook
+			exitCode: 0,
+		}
 	}
 
 	// Check for auto-help: if enabled, no args provided, and command has required flags

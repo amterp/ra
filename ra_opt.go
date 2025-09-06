@@ -21,6 +21,7 @@ func WithBypassValidation(b bool) RegisterOption {
 
 type parseCfg struct {
 	ignoreUnknown bool
+	dump          bool
 }
 
 type ParseOpt func(*parseCfg)
@@ -28,5 +29,11 @@ type ParseOpt func(*parseCfg)
 func WithIgnoreUnknown(ignore bool) ParseOpt {
 	return func(c *parseCfg) {
 		c.ignoreUnknown = ignore
+	}
+}
+
+func WithDump(dump bool) ParseOpt {
+	return func(c *parseCfg) {
+		c.dump = dump
 	}
 }

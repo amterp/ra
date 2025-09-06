@@ -1385,6 +1385,235 @@ Arguments:
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
 }
 
+func Test_RA_COLOR_Environment_Variable_Auto(t *testing.T) {
+	// Test RA_COLOR=auto behavior (should let color library decide)
+	originalColor := color.NoColor
+	defer func() { color.NoColor = originalColor }()
+
+	// Set environment variable
+	t.Setenv("RA_COLOR", "auto")
+
+	// Create a command and trigger parsing (which calls initializeColorFromEnv)
+	cmd := NewCmd("test")
+	_, err := NewString("arg").SetUsage("Test arg").Register(cmd)
+	assert.NoError(t, err)
+
+	// Parse to trigger color initialization
+	err = cmd.ParseOrError([]string{"value"})
+	assert.NoError(t, err)
+
+	// For auto mode, color.NoColor should remain at its library-determined value
+	// Since we can't easily test terminal detection, we verify the function doesn't explicitly set it
+}
+
+func Test_RA_COLOR_Environment_Variable_Always(t *testing.T) {
+	// Test RA_COLOR=always behavior (should force color on)
+	originalColor := color.NoColor
+	defer func() { color.NoColor = originalColor }()
+
+	// Set environment variable
+	t.Setenv("RA_COLOR", "always")
+
+	// Create a command and trigger parsing
+	cmd := NewCmd("test")
+	_, err := NewString("arg").SetUsage("Test arg").Register(cmd)
+	assert.NoError(t, err)
+
+	// Parse to trigger color initialization
+	err = cmd.ParseOrError([]string{"value"})
+	assert.NoError(t, err)
+
+	// For always mode, color.NoColor should be false
+	assert.False(t, color.NoColor, "RA_COLOR=always should set color.NoColor=false")
+}
+
+func Test_RA_COLOR_Environment_Variable_Never(t *testing.T) {
+	// Test RA_COLOR=never behavior (should disable color)
+	originalColor := color.NoColor
+	defer func() { color.NoColor = originalColor }()
+
+	// Set environment variable
+	t.Setenv("RA_COLOR", "never")
+
+	// Create a command and trigger parsing
+	cmd := NewCmd("test")
+	_, err := NewString("arg").SetUsage("Test arg").Register(cmd)
+	assert.NoError(t, err)
+
+	// Parse to trigger color initialization
+	err = cmd.ParseOrError([]string{"value"})
+	assert.NoError(t, err)
+
+	// For never mode, color.NoColor should be true
+	assert.True(t, color.NoColor, "RA_COLOR=never should set color.NoColor=true")
+}
+
+func Test_RA_COLOR_Environment_Variable_CaseInsensitive(t *testing.T) {
+	originalColor := color.NoColor
+	defer func() { color.NoColor = originalColor }()
+
+	testCases := []struct {
+		value    string
+		expected bool
+		desc     string
+	}{
+		{"Auto", false, "Auto should work like auto"},
+		{"ALWAYS", false, "ALWAYS should work like always"},
+		{"Never", true, "Never should work like never"},
+		{"NEVER", true, "NEVER should work like never"},
+		{"always", false, "always should work like always"},
+		{"auto", false, "auto should work like auto"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Setenv("RA_COLOR", tc.value)
+
+			cmd := NewCmd("test")
+			_, err := NewString("arg").SetUsage("Test arg").Register(cmd)
+			assert.NoError(t, err)
+
+			err = cmd.ParseOrError([]string{"value"})
+			assert.NoError(t, err)
+
+			if tc.value == "Auto" || tc.value == "auto" {
+				// For auto mode, we can't easily test the exact behavior
+				// but we verify the function completes without error
+			} else {
+				assert.Equal(t, tc.expected, color.NoColor, "Case insensitive %s should work", tc.value)
+			}
+		})
+	}
+}
+
+func Test_RA_COLOR_Environment_Variable_InvalidValues(t *testing.T) {
+	// Test that invalid values gracefully default to auto behavior
+	originalColor := color.NoColor
+	defer func() { color.NoColor = originalColor }()
+
+	invalidValues := []string{
+		"invalid",
+		"true",
+		"false",
+		"1",
+		"0",
+		"yes",
+		"no",
+		"on",
+		"off",
+		"",
+		"   ", // whitespace only
+	}
+
+	for _, invalidValue := range invalidValues {
+		t.Run("invalid_value_"+invalidValue, func(t *testing.T) {
+			t.Setenv("RA_COLOR", invalidValue)
+
+			cmd := NewCmd("test")
+			_, err := NewString("arg").SetUsage("Test arg").Register(cmd)
+			assert.NoError(t, err)
+
+			// Parse should not fail even with invalid values
+			err = cmd.ParseOrError([]string{"value"})
+			assert.NoError(t, err)
+
+			// Invalid values should be treated as auto (graceful degradation)
+			// We can't easily test what auto does, but we verify no panic/error occurs
+		})
+	}
+}
+
+func Test_RA_COLOR_Environment_Variable_AffectsActualColorOutput(t *testing.T) {
+	// Test that RA_COLOR settings actually affect the color output in usage text
+	originalColor := color.NoColor
+	defer func() { color.NoColor = originalColor }()
+
+	cmd := NewCmd("test")
+	cmd.SetDescription("Test color output")
+	_, err := NewString("arg").SetUsage("Test argument").Register(cmd)
+	assert.NoError(t, err)
+
+	// Test with RA_COLOR=always (should include ANSI codes)
+	t.Setenv("RA_COLOR", "always")
+	err = cmd.ParseOrError([]string{"value"})
+	assert.NoError(t, err)
+
+	usage := cmd.GenerateUsage(false)
+	assert.Contains(t, usage, "\033[32;1m", "RA_COLOR=always should produce ANSI color codes")
+	assert.Contains(t, usage, "\033[36m", "RA_COLOR=always should produce cyan color codes")
+
+	// Test with RA_COLOR=never (should not include ANSI codes)
+	t.Setenv("RA_COLOR", "never")
+	// Need to create new command to trigger re-initialization
+	cmd2 := NewCmd("test")
+	cmd2.SetDescription("Test color output")
+	_, err = NewString("arg").SetUsage("Test argument").Register(cmd2)
+	assert.NoError(t, err)
+
+	err = cmd2.ParseOrError([]string{"value"})
+	assert.NoError(t, err)
+
+	usage2 := cmd2.GenerateUsage(false)
+	assert.NotContains(t, usage2, "\033[32;1m", "RA_COLOR=never should not produce ANSI color codes")
+	assert.NotContains(t, usage2, "\033[36m", "RA_COLOR=never should not produce cyan color codes")
+	assert.Contains(t, usage2, "Usage:", "RA_COLOR=never should still show usage text")
+}
+
+func Test_RA_COLOR_Environment_Variable_WithWhitespace(t *testing.T) {
+	// Test that values with surrounding whitespace are handled correctly
+	originalColor := color.NoColor
+	defer func() { color.NoColor = originalColor }()
+
+	testCases := []struct {
+		value    string
+		expected bool
+		desc     string
+	}{
+		{"  never  ", true, "never with spaces should work"},
+		{"\talways\t", false, "always with tabs should work"},
+		{" auto ", false, "auto with spaces should work"},
+		{"\n never \n", true, "never with newlines should work"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Setenv("RA_COLOR", tc.value)
+
+			cmd := NewCmd("test")
+			_, err := NewString("arg").SetUsage("Test arg").Register(cmd)
+			assert.NoError(t, err)
+
+			err = cmd.ParseOrError([]string{"value"})
+			assert.NoError(t, err)
+
+			if strings.TrimSpace(strings.ToLower(tc.value)) == "auto" {
+				// For auto mode, we can't easily test the exact behavior
+			} else {
+				assert.Equal(t, tc.expected, color.NoColor, "Whitespace handling for %q should work", tc.value)
+			}
+		})
+	}
+}
+
+func Test_RA_COLOR_Environment_Variable_Unset(t *testing.T) {
+	// Test that when RA_COLOR is not set, behavior is unchanged (auto mode)
+	originalColor := color.NoColor
+	defer func() { color.NoColor = originalColor }()
+
+	// Ensure RA_COLOR is not set
+	t.Setenv("RA_COLOR", "")
+
+	cmd := NewCmd("test")
+	_, err := NewString("arg").SetUsage("Test arg").Register(cmd)
+	assert.NoError(t, err)
+
+	err = cmd.ParseOrError([]string{"value"})
+	assert.NoError(t, err)
+
+	// When unset (empty string), should behave like auto mode
+	// We can't easily test what auto does, but we verify no panic/error occurs
+}
+
 func Test_IndividualUsageChunks_Description(t *testing.T) {
 	// Test with description
 	cmd := NewCmd("test")

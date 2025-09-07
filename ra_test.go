@@ -3791,3 +3791,289 @@ func Test_ParseOrError_ProgrammingErrorType(t *testing.T) {
 	assert.True(t, errors.As(err, &progErr), "Should return a ProgrammingError type")
 	assert.Contains(t, err.Error(), "Undefined flag 'nonexistent'")
 }
+
+func Test_ShorthandReleaseInt(t *testing.T) {
+	fs := NewCmd("myscript")
+
+	// Create a release flag with shorthand "r" that accepts an integer value  
+	release, err := NewInt("release").
+		SetShort("r").
+		SetUsage("Release version number").
+		Register(fs)
+	assert.NoError(t, err)
+
+	// Test parsing with shorthand flag "-r 4"
+	err = fs.ParseOrError([]string{"-r", "4"})
+	assert.NoError(t, err)
+	assert.Equal(t, 4, *release)
+
+	// Test parsing with long form "--release 5"
+	*release = 0 // Reset
+	err = fs.ParseOrError([]string{"--release", "5"})
+	assert.NoError(t, err)
+	assert.Equal(t, 5, *release)
+}
+
+func Test_ShorthandReleaseInt_EqualsForm(t *testing.T) {
+	fs := NewCmd("myscript")
+
+	// Create a release flag with shorthand "r" that accepts an integer value  
+	release, err := NewInt("release").
+		SetShort("r").
+		SetUsage("Release version number").
+		Register(fs)
+	assert.NoError(t, err)
+
+	// Test parsing with equals form "-r=6" - this should now work
+	err = fs.ParseOrError([]string{"-r=6"})
+	assert.NoError(t, err)
+	assert.Equal(t, 6, *release)
+}
+
+func Test_ShortFlagEqualsForm_AllTypes(t *testing.T) {
+	fs := NewCmd("test")
+
+	// Test all flag types with equals form
+	boolFlag, _ := NewBool("bool").SetShort("b").Register(fs)
+	stringFlag, _ := NewString("string").SetShort("s").Register(fs)
+	intFlag, _ := NewInt("int").SetShort("i").Register(fs)
+	int64Flag, _ := NewInt64("int64").SetShort("l").Register(fs)
+	float64Flag, _ := NewFloat64("float64").SetShort("f").Register(fs)
+
+	err := fs.ParseOrError([]string{
+		"-b=true", 
+		"-s=hello", 
+		"-i=42", 
+		"-l=9223372036854775807", 
+		"-f=3.14",
+	})
+	assert.NoError(t, err)
+	
+	assert.Equal(t, true, *boolFlag)
+	assert.Equal(t, "hello", *stringFlag)
+	assert.Equal(t, 42, *intFlag)
+	assert.Equal(t, int64(9223372036854775807), *int64Flag)
+	assert.Equal(t, 3.14, *float64Flag)
+}
+
+func Test_ShortFlagEqualsForm_ErrorCases(t *testing.T) {
+	fs := NewCmd("test")
+	
+	// Test unknown short flag with equals
+	err := fs.ParseOrError([]string{"-z=value"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown shorthand flag: -z")
+}
+
+func Test_ClusteredShortFlagWithEquals(t *testing.T) {
+	fs := NewCmd("myscript")
+	
+	// Create flags: f (bool), r (int) 
+	fFlag, _ := NewBool("force").SetShort("f").Register(fs)
+	rFlag, _ := NewInt("release").SetShort("r").Register(fs)
+
+	// Test -fr=4 - should work like -fr 4 where f=true and r=4
+	err := fs.ParseOrError([]string{"-fr=4"})
+	assert.NoError(t, err)
+	assert.True(t, *fFlag)   // f should be true
+	assert.Equal(t, 4, *rFlag) // r should be 4
+	
+	// Reset and test the equivalent separate args form
+	*fFlag = false
+	*rFlag = 0
+	
+	err = fs.ParseOrError([]string{"-fr", "4"})
+	assert.NoError(t, err)
+	assert.True(t, *fFlag)   // f should be true
+	assert.Equal(t, 4, *rFlag) // r should be 4
+}
+
+func Test_ClusteredShortFlagWithEquals_Comprehensive(t *testing.T) {
+	fs := NewCmd("test")
+	
+	// Create various flag types (make non-bool flags optional)
+	vFlag, _ := NewBool("verbose").SetShort("v").Register(fs)
+	dFlag, _ := NewBool("debug").SetShort("d").Register(fs)
+	oFlag, _ := NewString("output").SetShort("o").SetOptional(true).Register(fs)
+	cFlag, _ := NewInt("count").SetShort("c").SetOptional(true).Register(fs)
+
+	// Test multiple bools with string at end: -vdo=file.txt
+	err := fs.ParseOrError([]string{"-vdo=file.txt"})
+	assert.NoError(t, err)
+	assert.True(t, *vFlag)
+	assert.True(t, *dFlag)
+	assert.Equal(t, "file.txt", *oFlag)
+	assert.Equal(t, 0, *cFlag) // should remain default
+
+	// Reset for next test
+	*vFlag = false
+	*dFlag = false
+	*oFlag = ""
+	*cFlag = 0
+
+	// Test multiple bools with int at end: -vdc=42
+	err = fs.ParseOrError([]string{"-vdc=42"})
+	assert.NoError(t, err)
+	assert.True(t, *vFlag)
+	assert.True(t, *dFlag)
+	assert.Equal(t, 42, *cFlag)
+	assert.Equal(t, "", *oFlag) // should remain default
+}
+
+func Test_ClusteredShortFlagWithEquals_ErrorCases(t *testing.T) {
+	fs := NewCmd("test")
+	
+	// Create flags where non-bool is not at the end
+	NewBool("verbose").SetShort("v").Register(fs)
+	NewString("output").SetShort("o").Register(fs)
+	NewBool("debug").SetShort("d").Register(fs)
+
+	// Test non-bool flag in middle of cluster with equals - should fail
+	err := fs.ParseOrError([]string{"-vod=value"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "non-bool flag -o must be last in cluster")
+}
+
+func Test_ExactUserExample_myscript_fr_equals_4(t *testing.T) {
+	// Test the exact example from the user: myscript -fr=4
+	fs := NewCmd("myscript")
+	
+	// f is a bool flag, r is an int flag
+	fFlag, _ := NewBool("force").SetShort("f").Register(fs)
+	rFlag, _ := NewInt("release").SetShort("r").Register(fs)
+
+	// Test -fr=4 behavior
+	err := fs.ParseOrError([]string{"-fr=4"})
+	assert.NoError(t, err)
+	assert.True(t, *fFlag)   // f should be true (bool)
+	assert.Equal(t, 4, *rFlag) // r should be 4 (gets the value from =4)
+
+	// Verify it behaves the same as -fr 4
+	*fFlag = false
+	*rFlag = 0
+	
+	err = fs.ParseOrError([]string{"-fr", "4"})
+	assert.NoError(t, err)
+	assert.True(t, *fFlag)   // f should be true (bool)
+	assert.Equal(t, 4, *rFlag) // r should be 4 (gets the value from next arg)
+}
+
+func Test_BugFix_NumberShortsMode_EqualsIgnored(t *testing.T) {
+	fs := NewCmd("test")
+	
+	// Create a number-based short flag and enable number shorts mode
+	intFlag, _ := NewInt("level").SetShort("3").Register(fs)
+	
+	// This should work but currently fails due to number shorts mode not checking hasValue
+	err := fs.ParseOrError([]string{"-3=5"})
+	assert.NoError(t, err)
+	assert.Equal(t, 5, *intFlag)
+}
+
+func Test_BugFix_MissingFlagTypeHandlers_ClusteredLogic(t *testing.T) {
+	fs := NewCmd("test")
+	
+	// Create flags with missing handlers in clustered logic
+	vFlag, _ := NewBool("verbose").SetShort("v").Register(fs)
+	i64Flag, _ := NewInt64("int64").SetShort("i").SetOptional(true).Register(fs)
+	fFlag, _ := NewFloat64("float").SetShort("f").SetOptional(true).Register(fs)
+	
+	// Test Int64Flag in clustered context - should work but currently might fail
+	err := fs.ParseOrError([]string{"-vi=123"})
+	assert.NoError(t, err)
+	assert.True(t, *vFlag)
+	assert.Equal(t, int64(123), *i64Flag)
+	
+	// Reset
+	*vFlag = false
+	*i64Flag = 0
+	
+	// Test Float64Flag in clustered context
+	err = fs.ParseOrError([]string{"-vf=3.14"})
+	assert.NoError(t, err)
+	assert.True(t, *vFlag)
+	assert.Equal(t, 3.14, *fFlag)
+}
+
+func Test_BugFix_IntCountingVsEqualsPrecedence(t *testing.T) {
+	fs := NewCmd("test")
+	
+	// Create an int flag that supports counting
+	verbosityFlag, _ := NewInt("verbosity").SetShort("v").SetOptional(true).Register(fs)
+	
+	// Test ambiguous case: -vvv=5
+	// New behavior: explicit equals value takes precedence over counting (result = 5)
+	err := fs.ParseOrError([]string{"-vvv=5"})
+	assert.NoError(t, err)
+	// New behavior: explicit value wins over counting
+	assert.Equal(t, 5, *verbosityFlag)
+	
+	// Test non-ambiguous cases work correctly
+	*verbosityFlag = 0
+	err = fs.ParseOrError([]string{"-v=5"})
+	assert.NoError(t, err)
+	assert.Equal(t, 5, *verbosityFlag) // Single v with equals should use equals value
+	
+	*verbosityFlag = 0
+	err = fs.ParseOrError([]string{"-vvv"})
+	assert.NoError(t, err)
+	assert.Equal(t, 3, *verbosityFlag) // Multiple v without equals should count
+}
+
+func Test_BugFix_ComprehensiveSliceFlagTests(t *testing.T) {
+	fs := NewCmd("test")
+	
+	// Test all slice flag types in clustered context with equals
+	vFlag, _ := NewBool("verbose").SetShort("v").Register(fs)
+	ssFlag, _ := NewStringSlice("strings").SetShort("s").SetOptional(true).Register(fs)
+	isFlag, _ := NewIntSlice("ints").SetShort("i").SetOptional(true).Register(fs)
+	i64sFlag, _ := NewInt64Slice("int64s").SetShort("l").SetOptional(true).Register(fs)
+	fsFlag, _ := NewFloat64Slice("floats").SetShort("f").SetOptional(true).Register(fs)
+	bsFlag, _ := NewBoolSlice("bools").SetShort("b").SetOptional(true).Register(fs)
+	
+	// Test StringSlice with equals
+	err := fs.ParseOrError([]string{"-vs=hello"})
+	assert.NoError(t, err)
+	assert.True(t, *vFlag)
+	assert.Equal(t, []string{"hello"}, *ssFlag)
+	
+	// Reset
+	*vFlag = false
+	*ssFlag = []string{}
+	
+	// Test IntSlice with equals
+	err = fs.ParseOrError([]string{"-vi=42"})
+	assert.NoError(t, err)
+	assert.True(t, *vFlag)
+	assert.Equal(t, []int{42}, *isFlag)
+	
+	// Reset
+	*vFlag = false
+	*isFlag = []int{}
+	
+	// Test Int64Slice with equals
+	err = fs.ParseOrError([]string{"-vl=123"})
+	assert.NoError(t, err)
+	assert.True(t, *vFlag)
+	assert.Equal(t, []int64{123}, *i64sFlag)
+	
+	// Reset
+	*vFlag = false
+	*i64sFlag = []int64{}
+	
+	// Test Float64Slice with equals
+	err = fs.ParseOrError([]string{"-vf=3.14"})
+	assert.NoError(t, err)
+	assert.True(t, *vFlag)
+	assert.Equal(t, []float64{3.14}, *fsFlag)
+	
+	// Reset
+	*vFlag = false
+	*fsFlag = []float64{}
+	
+	// Test BoolSlice with equals
+	err = fs.ParseOrError([]string{"-vb=true"})
+	assert.NoError(t, err)
+	assert.True(t, *vFlag)
+	assert.Equal(t, []bool{true}, *bsFlag)
+}

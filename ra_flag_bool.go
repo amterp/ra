@@ -76,6 +76,16 @@ func (f *BoolFlag) RegisterWithPtr(cmd *Cmd, ptr *bool, opts ...RegisterOption) 
 		opt(regConf)
 	}
 
+	// Validate flag name is not empty
+	if f.Name == "" {
+		return fmt.Errorf("flag name cannot be empty")
+	}
+
+	// Validate mutually exclusive configuration
+	if f.PositionalOnly && f.FlagOnly {
+		return fmt.Errorf("flag %q cannot be both PositionalOnly and FlagOnly (mutually exclusive)", f.Name)
+	}
+
 	if _, err := cmd.checkForGlobalFlagOverride(f.Name, f.Short, regConf.global); err != nil {
 		return err
 	}

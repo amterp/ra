@@ -92,6 +92,23 @@ func (f *IntFlag) RegisterWithPtr(cmd *Cmd, ptr *int, opts ...RegisterOption) er
 		opt(regConf)
 	}
 
+	// Validate flag name is not empty
+	if f.Name == "" {
+		return fmt.Errorf("flag name cannot be empty")
+	}
+
+	// Validate mutually exclusive configuration
+	if f.PositionalOnly && f.FlagOnly {
+		return fmt.Errorf("flag %q cannot be both PositionalOnly and FlagOnly (mutually exclusive)", f.Name)
+	}
+
+	// Validate default value against constraints
+	if f.Default != nil {
+		if err := f.validateDefaultValue(*f.Default); err != nil {
+			return fmt.Errorf("invalid default value for flag %q: %w", f.Name, err)
+		}
+	}
+
 	if _, err := cmd.checkForGlobalFlagOverride(f.Name, f.Short, regConf.global); err != nil {
 		return err
 	}
@@ -129,6 +146,35 @@ func (f *IntFlag) RegisterWithPtr(cmd *Cmd, ptr *int, opts ...RegisterOption) er
 		cmd.positional = append(cmd.positional, f.Name)
 	} else {
 		cmd.nonPositional = append(cmd.nonPositional, f.Name)
+	}
+
+	return nil
+}
+
+// validateDefaultValue validates that a default value satisfies all constraints
+func (f *IntFlag) validateDefaultValue(value int) error {
+	// Check min constraint
+	if f.min != nil {
+		inclusive := f.minInclusive == nil || *f.minInclusive // default to inclusive
+		if (inclusive && value < *f.min) || (!inclusive && value <= *f.min) {
+			if inclusive {
+				return fmt.Errorf("value %d is < minimum %d", value, *f.min)
+			} else {
+				return fmt.Errorf("value %d is <= minimum (exclusive) %d", value, *f.min)
+			}
+		}
+	}
+
+	// Check max constraint
+	if f.max != nil {
+		inclusive := f.maxInclusive == nil || *f.maxInclusive // default to inclusive
+		if (inclusive && value > *f.max) || (!inclusive && value >= *f.max) {
+			if inclusive {
+				return fmt.Errorf("value %d is > maximum %d", value, *f.max)
+			} else {
+				return fmt.Errorf("value %d is >= maximum (exclusive) %d", value, *f.max)
+			}
+		}
 	}
 
 	return nil

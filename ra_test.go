@@ -3795,7 +3795,7 @@ func Test_ParseOrError_ProgrammingErrorType(t *testing.T) {
 func Test_ShorthandReleaseInt(t *testing.T) {
 	fs := NewCmd("myscript")
 
-	// Create a release flag with shorthand "r" that accepts an integer value  
+	// Create a release flag with shorthand "r" that accepts an integer value
 	release, err := NewInt("release").
 		SetShort("r").
 		SetUsage("Release version number").
@@ -3817,7 +3817,7 @@ func Test_ShorthandReleaseInt(t *testing.T) {
 func Test_ShorthandReleaseInt_EqualsForm(t *testing.T) {
 	fs := NewCmd("myscript")
 
-	// Create a release flag with shorthand "r" that accepts an integer value  
+	// Create a release flag with shorthand "r" that accepts an integer value
 	release, err := NewInt("release").
 		SetShort("r").
 		SetUsage("Release version number").
@@ -3841,14 +3841,14 @@ func Test_ShortFlagEqualsForm_AllTypes(t *testing.T) {
 	float64Flag, _ := NewFloat64("float64").SetShort("f").Register(fs)
 
 	err := fs.ParseOrError([]string{
-		"-b=true", 
-		"-s=hello", 
-		"-i=42", 
-		"-l=9223372036854775807", 
+		"-b=true",
+		"-s=hello",
+		"-i=42",
+		"-l=9223372036854775807",
 		"-f=3.14",
 	})
 	assert.NoError(t, err)
-	
+
 	assert.Equal(t, true, *boolFlag)
 	assert.Equal(t, "hello", *stringFlag)
 	assert.Equal(t, 42, *intFlag)
@@ -3858,7 +3858,7 @@ func Test_ShortFlagEqualsForm_AllTypes(t *testing.T) {
 
 func Test_ShortFlagEqualsForm_ErrorCases(t *testing.T) {
 	fs := NewCmd("test")
-	
+
 	// Test unknown short flag with equals
 	err := fs.ParseOrError([]string{"-z=value"})
 	assert.Error(t, err)
@@ -3867,30 +3867,30 @@ func Test_ShortFlagEqualsForm_ErrorCases(t *testing.T) {
 
 func Test_ClusteredShortFlagWithEquals(t *testing.T) {
 	fs := NewCmd("myscript")
-	
-	// Create flags: f (bool), r (int) 
+
+	// Create flags: f (bool), r (int)
 	fFlag, _ := NewBool("force").SetShort("f").Register(fs)
 	rFlag, _ := NewInt("release").SetShort("r").Register(fs)
 
 	// Test -fr=4 - should work like -fr 4 where f=true and r=4
 	err := fs.ParseOrError([]string{"-fr=4"})
 	assert.NoError(t, err)
-	assert.True(t, *fFlag)   // f should be true
+	assert.True(t, *fFlag)     // f should be true
 	assert.Equal(t, 4, *rFlag) // r should be 4
-	
+
 	// Reset and test the equivalent separate args form
 	*fFlag = false
 	*rFlag = 0
-	
+
 	err = fs.ParseOrError([]string{"-fr", "4"})
 	assert.NoError(t, err)
-	assert.True(t, *fFlag)   // f should be true
+	assert.True(t, *fFlag)     // f should be true
 	assert.Equal(t, 4, *rFlag) // r should be 4
 }
 
 func Test_ClusteredShortFlagWithEquals_Comprehensive(t *testing.T) {
 	fs := NewCmd("test")
-	
+
 	// Create various flag types (make non-bool flags optional)
 	vFlag, _ := NewBool("verbose").SetShort("v").Register(fs)
 	dFlag, _ := NewBool("debug").SetShort("d").Register(fs)
@@ -3922,7 +3922,7 @@ func Test_ClusteredShortFlagWithEquals_Comprehensive(t *testing.T) {
 
 func Test_ClusteredShortFlagWithEquals_ErrorCases(t *testing.T) {
 	fs := NewCmd("test")
-	
+
 	// Create flags where non-bool is not at the end
 	NewBool("verbose").SetShort("v").Register(fs)
 	NewString("output").SetShort("o").Register(fs)
@@ -3937,7 +3937,7 @@ func Test_ClusteredShortFlagWithEquals_ErrorCases(t *testing.T) {
 func Test_ExactUserExample_myscript_fr_equals_4(t *testing.T) {
 	// Test the exact example from the user: myscript -fr=4
 	fs := NewCmd("myscript")
-	
+
 	// f is a bool flag, r is an int flag
 	fFlag, _ := NewBool("force").SetShort("f").Register(fs)
 	rFlag, _ := NewInt("release").SetShort("r").Register(fs)
@@ -3945,25 +3945,25 @@ func Test_ExactUserExample_myscript_fr_equals_4(t *testing.T) {
 	// Test -fr=4 behavior
 	err := fs.ParseOrError([]string{"-fr=4"})
 	assert.NoError(t, err)
-	assert.True(t, *fFlag)   // f should be true (bool)
+	assert.True(t, *fFlag)     // f should be true (bool)
 	assert.Equal(t, 4, *rFlag) // r should be 4 (gets the value from =4)
 
 	// Verify it behaves the same as -fr 4
 	*fFlag = false
 	*rFlag = 0
-	
+
 	err = fs.ParseOrError([]string{"-fr", "4"})
 	assert.NoError(t, err)
-	assert.True(t, *fFlag)   // f should be true (bool)
+	assert.True(t, *fFlag)     // f should be true (bool)
 	assert.Equal(t, 4, *rFlag) // r should be 4 (gets the value from next arg)
 }
 
 func Test_BugFix_NumberShortsMode_EqualsIgnored(t *testing.T) {
 	fs := NewCmd("test")
-	
+
 	// Create a number-based short flag and enable number shorts mode
 	intFlag, _ := NewInt("level").SetShort("3").Register(fs)
-	
+
 	// This should work but currently fails due to number shorts mode not checking hasValue
 	err := fs.ParseOrError([]string{"-3=5"})
 	assert.NoError(t, err)
@@ -3972,22 +3972,22 @@ func Test_BugFix_NumberShortsMode_EqualsIgnored(t *testing.T) {
 
 func Test_BugFix_MissingFlagTypeHandlers_ClusteredLogic(t *testing.T) {
 	fs := NewCmd("test")
-	
+
 	// Create flags with missing handlers in clustered logic
 	vFlag, _ := NewBool("verbose").SetShort("v").Register(fs)
 	i64Flag, _ := NewInt64("int64").SetShort("i").SetOptional(true).Register(fs)
 	fFlag, _ := NewFloat64("float").SetShort("f").SetOptional(true).Register(fs)
-	
+
 	// Test Int64Flag in clustered context - should work but currently might fail
 	err := fs.ParseOrError([]string{"-vi=123"})
 	assert.NoError(t, err)
 	assert.True(t, *vFlag)
 	assert.Equal(t, int64(123), *i64Flag)
-	
+
 	// Reset
 	*vFlag = false
 	*i64Flag = 0
-	
+
 	// Test Float64Flag in clustered context
 	err = fs.ParseOrError([]string{"-vf=3.14"})
 	assert.NoError(t, err)
@@ -3997,23 +3997,23 @@ func Test_BugFix_MissingFlagTypeHandlers_ClusteredLogic(t *testing.T) {
 
 func Test_BugFix_IntCountingVsEqualsPrecedence(t *testing.T) {
 	fs := NewCmd("test")
-	
+
 	// Create an int flag that supports counting
 	verbosityFlag, _ := NewInt("verbosity").SetShort("v").SetOptional(true).Register(fs)
-	
+
 	// Test ambiguous case: -vvv=5
 	// New behavior: explicit equals value takes precedence over counting (result = 5)
 	err := fs.ParseOrError([]string{"-vvv=5"})
 	assert.NoError(t, err)
 	// New behavior: explicit value wins over counting
 	assert.Equal(t, 5, *verbosityFlag)
-	
+
 	// Test non-ambiguous cases work correctly
 	*verbosityFlag = 0
 	err = fs.ParseOrError([]string{"-v=5"})
 	assert.NoError(t, err)
 	assert.Equal(t, 5, *verbosityFlag) // Single v with equals should use equals value
-	
+
 	*verbosityFlag = 0
 	err = fs.ParseOrError([]string{"-vvv"})
 	assert.NoError(t, err)
@@ -4022,7 +4022,7 @@ func Test_BugFix_IntCountingVsEqualsPrecedence(t *testing.T) {
 
 func Test_BugFix_ComprehensiveSliceFlagTests(t *testing.T) {
 	fs := NewCmd("test")
-	
+
 	// Test all slice flag types in clustered context with equals
 	vFlag, _ := NewBool("verbose").SetShort("v").Register(fs)
 	ssFlag, _ := NewStringSlice("strings").SetShort("s").SetOptional(true).Register(fs)
@@ -4030,50 +4030,201 @@ func Test_BugFix_ComprehensiveSliceFlagTests(t *testing.T) {
 	i64sFlag, _ := NewInt64Slice("int64s").SetShort("l").SetOptional(true).Register(fs)
 	fsFlag, _ := NewFloat64Slice("floats").SetShort("f").SetOptional(true).Register(fs)
 	bsFlag, _ := NewBoolSlice("bools").SetShort("b").SetOptional(true).Register(fs)
-	
+
 	// Test StringSlice with equals
 	err := fs.ParseOrError([]string{"-vs=hello"})
 	assert.NoError(t, err)
 	assert.True(t, *vFlag)
 	assert.Equal(t, []string{"hello"}, *ssFlag)
-	
+
 	// Reset
 	*vFlag = false
 	*ssFlag = []string{}
-	
+
 	// Test IntSlice with equals
 	err = fs.ParseOrError([]string{"-vi=42"})
 	assert.NoError(t, err)
 	assert.True(t, *vFlag)
 	assert.Equal(t, []int{42}, *isFlag)
-	
+
 	// Reset
 	*vFlag = false
 	*isFlag = []int{}
-	
+
 	// Test Int64Slice with equals
 	err = fs.ParseOrError([]string{"-vl=123"})
 	assert.NoError(t, err)
 	assert.True(t, *vFlag)
 	assert.Equal(t, []int64{123}, *i64sFlag)
-	
+
 	// Reset
 	*vFlag = false
 	*i64sFlag = []int64{}
-	
+
 	// Test Float64Slice with equals
 	err = fs.ParseOrError([]string{"-vf=3.14"})
 	assert.NoError(t, err)
 	assert.True(t, *vFlag)
 	assert.Equal(t, []float64{3.14}, *fsFlag)
-	
+
 	// Reset
 	*vFlag = false
 	*fsFlag = []float64{}
-	
+
 	// Test BoolSlice with equals
 	err = fs.ParseOrError([]string{"-vb=true"})
 	assert.NoError(t, err)
 	assert.True(t, *vFlag)
 	assert.Equal(t, []bool{true}, *bsFlag)
+}
+
+// ===========================================
+// BUG REPRODUCTION TESTS - High Priority
+// ===========================================
+
+// Bug #1: Empty Flag Names Accepted (Major)
+func Test_Bug_EmptyFlagNamesAccepted(t *testing.T) {
+	cmd := NewCmd("test")
+
+	// Test empty string flag name - should fail
+	_, err := NewString("").Register(cmd)
+	assert.Error(t, err, "Empty flag name should be rejected during registration")
+	assert.Contains(t, err.Error(), "empty", "Error should mention empty flag name")
+
+	// Test empty int flag name - should fail
+	_, err = NewInt("").Register(cmd)
+	assert.Error(t, err, "Empty int flag name should be rejected")
+
+	// Test empty bool flag name - should fail
+	_, err = NewBool("").Register(cmd)
+	assert.Error(t, err, "Empty bool flag name should be rejected")
+}
+
+// Bug #2: Invalid Configuration Accepted (FlagOnly + PositionalOnly)
+func Test_Bug_InvalidConfigurationAccepted(t *testing.T) {
+	cmd := NewCmd("test")
+
+	// Test mutually exclusive configuration - should fail
+	flag := NewString("test")
+	flag.PositionalOnly = true
+	flag.FlagOnly = true
+	_, err := flag.Register(cmd)
+	assert.Error(t, err, "Mutually exclusive FlagOnly + PositionalOnly should be rejected")
+	assert.Contains(t, err.Error(), "mutually exclusive", "Error should mention mutual exclusion")
+}
+
+// Bug #3: Enum Constraint Default Not Validated
+func Test_Bug_EnumConstraintDefaultNotValidated(t *testing.T) {
+	cmd := NewCmd("test")
+
+	// Test default value that doesn't match enum constraint - should fail during registration
+	_, err := NewString("test").
+		SetEnumConstraint([]string{"a", "b", "c"}).
+		SetDefault("d"). // "d" not in enum
+		Register(cmd)
+	assert.Error(t, err, "Default value violating enum constraint should be rejected during registration")
+	assert.Contains(t, err.Error(), "invalid default", "Error should mention invalid default")
+}
+
+// Bug #4: Range Constraint Default Not Validated
+func Test_Bug_RangeConstraintDefaultNotValidated(t *testing.T) {
+	cmd := NewCmd("test")
+
+	// Test default value outside range constraint - should fail during registration
+	_, err := NewInt("test").
+		SetMin(10, true).
+		SetMax(20, true).
+		SetDefault(5). // 5 is outside range [10,20]
+		Register(cmd)
+	assert.Error(t, err, "Default value violating range constraint should be rejected during registration")
+	assert.Contains(t, err.Error(), "invalid default", "Error should mention invalid default")
+}
+
+// ===========================================
+// BUG REPRODUCTION TESTS - Medium Priority
+// ===========================================
+
+// Bug #5: Integer Overflow Not Detected
+func Test_Bug_IntegerOverflowNotDetected(t *testing.T) {
+	cmd := NewCmd("test")
+	intVal, _ := NewInt("input").Register(cmd)
+
+	// Test large integer that might overflow on 32-bit systems
+	err := cmd.ParseOrError([]string{"--input", "9223372036854775807"})
+
+	// Should now detect overflow on 32-bit systems
+	if err != nil {
+		// If error occurs, it should mention overflow
+		assert.Contains(t, err.Error(), "overflow", "Integer overflow should be detected")
+	} else {
+		// If no error on 64-bit system, value should be reasonable (not corrupted)
+		assert.True(t, *intVal > 0, "Value should not be corrupted by overflow")
+	}
+}
+
+// Bug #6: Help Flag Not Processed When Invalid Flag Present
+func Test_Bug_HelpFlagNotProcessedWithInvalidFlag(t *testing.T) {
+	cmd := NewCmd("test")
+	NewString("required").Register(cmd)
+
+	// Help should take precedence over unknown flag error
+	err := cmd.ParseOrError([]string{"--invalid", "--help"})
+	assert.Equal(t, HelpInvokedErr, err, "Help should be processed even with invalid flags present")
+
+	// Test with -h as well
+	err = cmd.ParseOrError([]string{"--invalid", "-h"})
+	assert.Equal(t, HelpInvokedErr, err, "Short help should be processed even with invalid flags present")
+}
+
+// ===========================================
+// BUG REPRODUCTION TESTS - Minor Priority
+// ===========================================
+
+// Note: Bug #7 (Help Flags as String Values) was determined to be working as intended.
+// Help flags should take precedence, and users should use --flag=value or -- for literal values.
+
+// Bug #8: Boolean Type Conversion Error Messages Unclear
+func Test_Bug_BooleanTypeConversionErrorMessagesUnclear(t *testing.T) {
+	cmd := NewCmd("test")
+	NewBool("input").SetOptional(true).Register(cmd)
+
+	// Test 1: Invalid boolean value with = syntax should give clear error message
+	err := cmd.ParseOrError([]string{"--input=maybe"})
+	assert.Error(t, err, "Invalid boolean value should cause error")
+	assert.Contains(t, err.Error(), "ParseBool", "Error should mention boolean parsing")
+	assert.Contains(t, err.Error(), "input", "Error should mention the flag name")
+	assert.Contains(t, err.Error(), "maybe", "Error should mention the invalid value")
+
+	// Test 2: Using space syntax should give helpful message about boolean flags
+	err = cmd.ParseOrError([]string{"--input", "maybe"})
+	assert.Error(t, err, "Should give helpful error for space syntax")
+	// Should give helpful guidance about boolean flag syntax
+	assert.Contains(t, err.Error(), "Boolean flags", "Error should mention boolean flags")
+	assert.Contains(t, err.Error(), "input", "Error should mention the flag name")
+	assert.Contains(t, err.Error(), "maybe", "Error should mention the invalid value")
+	assert.Contains(t, err.Error(), "--flag=value syntax", "Error should suggest correct syntax")
+}
+
+// Debug test to understand boolean behavior
+func Test_BooleanBehaviorDebug(t *testing.T) {
+	cmd := NewCmd("test")
+	flag, _ := NewBool("test").SetOptional(true).Register(cmd)
+
+	// Test 1: --test without value (should be true)
+	err := cmd.ParseOrError([]string{"--test"})
+	t.Logf("Test 1: --test -> err=%v, flag=%v", err, *flag)
+
+	// Reset
+	*flag = false
+
+	// Test 2: --test=true (should be true)
+	err = cmd.ParseOrError([]string{"--test=true"})
+	t.Logf("Test 2: --test=true -> err=%v, flag=%v", err, *flag)
+
+	// Reset
+	*flag = false
+
+	// Test 3: --test false (should be false, but what actually happens?)
+	err = cmd.ParseOrError([]string{"--test", "false"})
+	t.Logf("Test 3: --test false -> err=%v, flag=%v", err, *flag)
 }

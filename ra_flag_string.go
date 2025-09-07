@@ -94,6 +94,23 @@ func (f *StringFlag) RegisterWithPtr(cmd *Cmd, ptr *string, opts ...RegisterOpti
 		opt(regConf)
 	}
 
+	// Validate flag name is not empty
+	if f.Name == "" {
+		return fmt.Errorf("flag name cannot be empty")
+	}
+
+	// Validate mutually exclusive configuration
+	if f.PositionalOnly && f.FlagOnly {
+		return fmt.Errorf("flag %q cannot be both PositionalOnly and FlagOnly (mutually exclusive)", f.Name)
+	}
+
+	// Validate default value against constraints
+	if f.Default != nil {
+		if err := f.validateDefaultValue(*f.Default); err != nil {
+			return fmt.Errorf("invalid default value for flag %q: %w", f.Name, err)
+		}
+	}
+
 	if _, err := cmd.checkForGlobalFlagOverride(f.Name, f.Short, regConf.global); err != nil {
 		return err
 	}
@@ -132,6 +149,32 @@ func (f *StringFlag) RegisterWithPtr(cmd *Cmd, ptr *string, opts ...RegisterOpti
 		cmd.positional = append(cmd.positional, f.Name)
 	} else {
 		cmd.nonPositional = append(cmd.nonPositional, f.Name)
+	}
+
+	return nil
+}
+
+// validateDefaultValue validates that a default value satisfies all constraints
+func (f *StringFlag) validateDefaultValue(value string) error {
+	// Check enum constraint
+	if f.EnumConstraint != nil {
+		valid := false
+		for _, allowed := range *f.EnumConstraint {
+			if value == allowed {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("value %q not in allowed enum values %v", value, *f.EnumConstraint)
+		}
+	}
+
+	// Check regex constraint
+	if f.RegexConstraint != nil {
+		if !f.RegexConstraint.MatchString(value) {
+			return fmt.Errorf("value %q does not match regex pattern %s", value, f.RegexConstraint.String())
+		}
 	}
 
 	return nil

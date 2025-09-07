@@ -452,6 +452,10 @@ func (c *Cmd) parseLongFlag(args []string, index int) (int, error) {
 
 	flag, exists := c.flags[flagName]
 	if !exists {
+		// Before returning unknown flag error, check if help flags are present
+		if c.helpEnabled && c.hasHelpFlags(args) {
+			return 0, c.createHelpError(args)
+		}
 		return 0, fmt.Errorf("unknown flag: --%s", flagName)
 	}
 
@@ -1033,6 +1037,18 @@ func (c *Cmd) assignPositionalWithMode(value string, positionalOnlyMode bool) er
 		}
 	}
 
+	// Check if we have boolean flags that might have been intended to take this value
+	boolFlagNames := []string{}
+	for name, flag := range c.flags {
+		if _, isBool := flag.(*BoolFlag); isBool {
+			boolFlagNames = append(boolFlagNames, name)
+		}
+	}
+
+	if len(boolFlagNames) > 0 {
+		return fmt.Errorf("Too many positional arguments. Unused: [%s]. Note: Boolean flags (%v) require --flag=value syntax, not --flag value", value, boolFlagNames)
+	}
+
 	return fmt.Errorf("Too many positional arguments. Unused: [%s]", value)
 }
 
@@ -1071,10 +1087,18 @@ func (c *Cmd) setStringValue(f *StringFlag, value string) error {
 }
 
 func (c *Cmd) setIntValue(f *IntFlag, value string) error {
-	val, err := strconv.Atoi(value)
+	// Parse as int64 first to detect overflow
+	val64, err := strconv.ParseInt(value, 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid integer value for %s: %s", f.Name, value)
 	}
+
+	// Check for platform-specific int overflow
+	if val64 < int64(int(^uint(0)>>1)*-1-1) || val64 > int64(int(^uint(0)>>1)) {
+		return fmt.Errorf("integer overflow for %s: %s (value exceeds platform int range)", f.Name, value)
+	}
+
+	val := int(val64)
 
 	if f.min != nil {
 		inclusive := f.minInclusive == nil || *f.minInclusive // default to inclusive
@@ -1884,4 +1908,34 @@ func (c *Cmd) hasRequiredFlags() bool {
 	}
 
 	return false
+}
+
+// hasHelpFlags checks if help flags are present in args
+func (c *Cmd) hasHelpFlags(args []string) bool {
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" {
+			return true
+		}
+	}
+	return false
+}
+
+// createHelpError creates a help invoked error, determining if it's long or short help
+func (c *Cmd) createHelpError(args []string) error {
+	isLongHelp := false
+	for _, arg := range args {
+		if arg == "--help" {
+			isLongHelp = true
+			break
+		}
+	}
+
+	return &helpInvokedError{
+		output:         "", // Will be generated later, after PostParse hook
+		exitCode:       0,
+		useStdout:      true,
+		isLongHelp:     isLongHelp,
+		isAutoHelp:     false,
+		useCustomUsage: c.customUsage != nil,
+	}
 }

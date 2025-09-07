@@ -117,7 +117,9 @@ func (c *Cmd) generateCommandInfoSectionWithIndent(depth int) string {
 
 	sb.WriteString(fmt.Sprintf("%s  Help Enabled: %s\n", indent, BoldS(fmt.Sprintf("%t", c.helpEnabled))))
 	sb.WriteString(fmt.Sprintf("%s  Auto Help on No Args: %s\n", indent, BoldS(fmt.Sprintf("%t", c.autoHelpOnNoArgs))))
-	sb.WriteString(fmt.Sprintf("%s  Exclude Name from Usage: %s\n", indent, BoldS(fmt.Sprintf("%t", c.excludeNameFromUsage))))
+	sb.WriteString(
+		fmt.Sprintf("%s  Exclude Name from Usage: %s\n", indent, BoldS(fmt.Sprintf("%t", c.excludeNameFromUsage))),
+	)
 
 	if c.customUsage != nil {
 		sb.WriteString(fmt.Sprintf("%s  Custom Usage Function: %s\n", indent, BoldS("set")))

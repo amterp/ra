@@ -1045,10 +1045,6 @@ func (c *Cmd) assignPositionalWithMode(value string, positionalOnlyMode bool) er
 		}
 	}
 
-	if len(boolFlagNames) > 0 {
-		return fmt.Errorf("Too many positional arguments. Unused: [%s]. Note: Boolean flags (%v) require --flag=value syntax, not --flag value", value, boolFlagNames)
-	}
-
 	return fmt.Errorf("Too many positional arguments. Unused: [%s]", value)
 }
 

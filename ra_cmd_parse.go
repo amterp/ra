@@ -555,6 +555,15 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool) (i
 	arg := args[index]
 	shorts := arg[1:] // remove -
 
+	// Check for = syntax in short flags (e.g., -r=value)
+	var value string
+	var hasValue bool
+	if idx := strings.Index(shorts, "="); idx != -1 {
+		value = shorts[idx+1:]
+		shorts = shorts[:idx]
+		hasValue = true
+	}
+
 	// Check if this is a negative number without number shorts mode
 	if !numberShortsMode && len(shorts) > 0 && (isDigit(shorts[0]) || shorts[0] == '.') {
 		// This is a negative number, treat as positional
@@ -577,19 +586,92 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool) (i
 					return 1, nil
 				}
 				// Single occurrence, needs value
-				if index+1 >= len(args) {
-					return 0, fmt.Errorf("flag -%s requires a value", shorts)
+				if hasValue {
+					// Use equals value
+					err := c.setIntValue(f, value)
+					return 1, err
+				} else {
+					// Use next argument
+					if index+1 >= len(args) {
+						return 0, fmt.Errorf("flag -%s requires a value", shorts)
+					}
+					err := c.setIntValue(f, args[index+1])
+					return 2, err
 				}
-				err := c.setIntValue(f, args[index+1])
-				return 2, err
 			case *StringFlag:
-				if index+1 >= len(args) {
-					return 0, fmt.Errorf("flag -%s requires a value", shorts)
+				if hasValue {
+					// Use equals value
+					err := c.setStringValue(f, value)
+					return 1, err
+				} else {
+					// Use next argument
+					if index+1 >= len(args) {
+						return 0, fmt.Errorf("flag -%s requires a value", shorts)
+					}
+					err := c.setStringValue(f, args[index+1])
+					return 2, err
 				}
-				err := c.setStringValue(f, args[index+1])
-				return 2, err
 			}
 		}
+	}
+
+	// Handle equals syntax for short flags (e.g., -r=value or -fr=value)
+	if hasValue {
+		// For single short flag with equals, handle directly
+		if len(shorts) == 1 {
+			shortStr := string(shorts[0])
+			flagName, exists := c.shortToName[shortStr]
+			if !exists {
+				return 0, fmt.Errorf("unknown shorthand flag: -%s", shortStr)
+			}
+
+			flag := c.flags[flagName]
+			c.configured[flagName] = true
+
+			switch f := flag.(type) {
+			case *BoolFlag:
+				val, err := c.parseBoolValue(value)
+				if err != nil {
+					return 0, fmt.Errorf("invalid value for flag -%s: %s", shortStr, err.Error())
+				}
+				*f.Value = val
+				return 1, nil
+			case *StringFlag:
+				err := c.setStringValue(f, value)
+				return 1, err
+			case *IntFlag:
+				err := c.setIntValue(f, value)
+				return 1, err
+			case *Int64Flag:
+				err := c.setInt64Value(f, value)
+				return 1, err
+			case *Float64Flag:
+				err := c.setFloat64Value(f, value)
+				return 1, err
+			case *StringSliceFlag:
+				_, err := c.appendStringSliceValue(f, value)
+				if err == nil && f.Variadic {
+					c.lastVariadicFlag = flagName
+				}
+				return 1, err
+			case *IntSliceFlag:
+				_, err := c.appendIntSliceValue(f, value)
+				return 1, err
+			case *Int64SliceFlag:
+				_, err := c.appendInt64SliceValue(f, value)
+				return 1, err
+			case *Float64SliceFlag:
+				_, err := c.appendFloat64SliceValue(f, value)
+				return 1, err
+			case *BoolSliceFlag:
+				_, err := c.appendBoolSliceValue(f, value)
+				return 1, err
+			}
+
+			return 0, NewProgrammingError(fmt.Sprintf("unsupported flag type for: %s", flagName))
+		}
+		// For clustered flags with equals (e.g., -fr=value), fall through to regular clustering
+		// but the equals value will be used by the last flag in the cluster
 	}
 
 	// Regular short flag processing
@@ -610,10 +692,16 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool) (i
 			if flagName, exists := c.shortToName[string(firstChar)]; exists {
 				if flag, exists := c.flags[flagName]; exists {
 					if intFlag, ok := flag.(*IntFlag); ok {
-						// This is an int flag being repeated, set it to the count
 						c.configured[flagName] = true
-						*intFlag.Value = len(shorts)
-						return 1, nil
+						if hasValue {
+							// Explicit equals value takes precedence over counting
+							err := c.setIntValue(intFlag, value)
+							return 1, err
+						} else {
+							// This is an int flag being repeated, set it to the count
+							*intFlag.Value = len(shorts)
+							return 1, nil
+						}
 					}
 				}
 			}
@@ -636,42 +724,207 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool) (i
 		case *StringFlag:
 			if i == len(shorts)-1 {
 				// Last flag in cluster, can take value
-				if index+1 >= len(args) {
-					return 0, fmt.Errorf("flag -%s requires a value", shortStr)
+				if hasValue {
+					// Use equals value
+					err := c.setStringValue(f, value)
+					if err != nil {
+						return 0, err
+					}
+					consumed = 1
+				} else {
+					// Use next argument
+					if index+1 >= len(args) {
+						return 0, fmt.Errorf("flag -%s requires a value", shortStr)
+					}
+					err := c.setStringValue(f, args[index+1])
+					if err != nil {
+						return 0, err
+					}
+					consumed = 2
 				}
-				err := c.setStringValue(f, args[index+1])
-				if err != nil {
-					return 0, err
-				}
-				consumed = 2
 			} else {
 				return 0, fmt.Errorf("non-bool flag -%s must be last in cluster", shortStr)
 			}
 		case *IntFlag:
 			if i == len(shorts)-1 {
 				// Last flag in cluster, can take value
-				if index+1 >= len(args) {
-					return 0, fmt.Errorf("flag -%s requires a value", shortStr)
+				if hasValue {
+					// Use equals value
+					err := c.setIntValue(f, value)
+					if err != nil {
+						return 0, err
+					}
+					consumed = 1
+				} else {
+					// Use next argument
+					if index+1 >= len(args) {
+						return 0, fmt.Errorf("flag -%s requires a value", shortStr)
+					}
+					err := c.setIntValue(f, args[index+1])
+					if err != nil {
+						return 0, err
+					}
+					consumed = 2
 				}
-				err := c.setIntValue(f, args[index+1])
-				if err != nil {
-					return 0, err
-				}
-				consumed = 2
 			} else {
 				return 0, fmt.Errorf("non-bool flag -%s must be last in cluster", shortStr)
 			}
 		case *StringSliceFlag:
 			if i == len(shorts)-1 {
 				// Last flag in cluster, can take value
-				consumed, err := c.parseSliceFlag(args, index, f)
-				if err != nil {
-					return 0, err
+				if hasValue {
+					// Use equals value
+					_, err := c.appendStringSliceValue(f, value)
+					if err != nil {
+						return 0, err
+					}
+					if f.Variadic {
+						c.lastVariadicFlag = flagName
+					}
+					consumed = 1
+				} else {
+					// Use parseSliceFlag for next argument(s)
+					consumed, err := c.parseSliceFlag(args, index, f)
+					if err != nil {
+						return 0, err
+					}
+					if f.Variadic {
+						c.lastVariadicFlag = flagName
+					}
+					return consumed, nil
 				}
-				if f.Variadic {
-					c.lastVariadicFlag = flagName
+			} else {
+				return 0, fmt.Errorf("non-bool flag -%s must be last in cluster", shortStr)
+			}
+		case *Int64Flag:
+			if i == len(shorts)-1 {
+				// Last flag in cluster, can take value
+				if hasValue {
+					// Use equals value
+					err := c.setInt64Value(f, value)
+					if err != nil {
+						return 0, err
+					}
+					consumed = 1
+				} else {
+					// Use next argument
+					if index+1 >= len(args) {
+						return 0, fmt.Errorf("flag -%s requires a value", shortStr)
+					}
+					err := c.setInt64Value(f, args[index+1])
+					if err != nil {
+						return 0, err
+					}
+					consumed = 2
 				}
-				return consumed, nil
+			} else {
+				return 0, fmt.Errorf("non-bool flag -%s must be last in cluster", shortStr)
+			}
+		case *Float64Flag:
+			if i == len(shorts)-1 {
+				// Last flag in cluster, can take value
+				if hasValue {
+					// Use equals value
+					err := c.setFloat64Value(f, value)
+					if err != nil {
+						return 0, err
+					}
+					consumed = 1
+				} else {
+					// Use next argument
+					if index+1 >= len(args) {
+						return 0, fmt.Errorf("flag -%s requires a value", shortStr)
+					}
+					err := c.setFloat64Value(f, args[index+1])
+					if err != nil {
+						return 0, err
+					}
+					consumed = 2
+				}
+			} else {
+				return 0, fmt.Errorf("non-bool flag -%s must be last in cluster", shortStr)
+			}
+		case *IntSliceFlag:
+			if i == len(shorts)-1 {
+				// Last flag in cluster, can take value
+				if hasValue {
+					// Use equals value
+					_, err := c.appendIntSliceValue(f, value)
+					if err != nil {
+						return 0, err
+					}
+					consumed = 1
+				} else {
+					// Use parseIntSliceFlag for next argument(s)
+					consumed, err := c.parseIntSliceFlag(args, index, f)
+					if err != nil {
+						return 0, err
+					}
+					return consumed, nil
+				}
+			} else {
+				return 0, fmt.Errorf("non-bool flag -%s must be last in cluster", shortStr)
+			}
+		case *Int64SliceFlag:
+			if i == len(shorts)-1 {
+				// Last flag in cluster, can take value
+				if hasValue {
+					// Use equals value
+					_, err := c.appendInt64SliceValue(f, value)
+					if err != nil {
+						return 0, err
+					}
+					consumed = 1
+				} else {
+					// Use parseInt64SliceFlag for next argument(s)
+					consumed, err := c.parseInt64SliceFlag(args, index, f)
+					if err != nil {
+						return 0, err
+					}
+					return consumed, nil
+				}
+			} else {
+				return 0, fmt.Errorf("non-bool flag -%s must be last in cluster", shortStr)
+			}
+		case *Float64SliceFlag:
+			if i == len(shorts)-1 {
+				// Last flag in cluster, can take value
+				if hasValue {
+					// Use equals value
+					_, err := c.appendFloat64SliceValue(f, value)
+					if err != nil {
+						return 0, err
+					}
+					consumed = 1
+				} else {
+					// Use parseFloat64SliceFlag for next argument(s)
+					consumed, err := c.parseFloat64SliceFlag(args, index, f)
+					if err != nil {
+						return 0, err
+					}
+					return consumed, nil
+				}
+			} else {
+				return 0, fmt.Errorf("non-bool flag -%s must be last in cluster", shortStr)
+			}
+		case *BoolSliceFlag:
+			if i == len(shorts)-1 {
+				// Last flag in cluster, can take value
+				if hasValue {
+					// Use equals value
+					_, err := c.appendBoolSliceValue(f, value)
+					if err != nil {
+						return 0, err
+					}
+					consumed = 1
+				} else {
+					// Use parseBoolSliceFlag for next argument(s)
+					consumed, err := c.parseBoolSliceFlag(args, index, f)
+					if err != nil {
+						return 0, err
+					}
+					return consumed, nil
+				}
 			} else {
 				return 0, fmt.Errorf("non-bool flag -%s must be last in cluster", shortStr)
 			}

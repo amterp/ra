@@ -20,8 +20,9 @@ func WithBypassValidation(b bool) RegisterOption {
 }
 
 type parseCfg struct {
-	ignoreUnknown bool
-	dump          bool
+	ignoreUnknown        bool
+	variadicUnknownFlags bool
+	dump                 bool
 }
 
 type ParseOpt func(*parseCfg)
@@ -29,6 +30,12 @@ type ParseOpt func(*parseCfg)
 func WithIgnoreUnknown(ignore bool) ParseOpt {
 	return func(c *parseCfg) {
 		c.ignoreUnknown = ignore
+	}
+}
+
+func WithVariadicUnknownFlags(enable bool) ParseOpt {
+	return func(c *parseCfg) {
+		c.variadicUnknownFlags = enable
 	}
 }
 

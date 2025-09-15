@@ -257,7 +257,7 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 
 		// Handle flags (only if not in positional-only mode)
 		if strings.HasPrefix(arg, "-") {
-			consumed, err := c.parseFlag(args, i, numberShortsMode)
+			consumed, err := c.parseFlag(args, i, numberShortsMode, cfg)
 			if err != nil {
 				if err.Error() == "not a flag: "+arg {
 					// This is a negative number, treat as positional
@@ -271,6 +271,22 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 					i++
 					continue
 				}
+
+				// Handle unknown flags
+				if cfg.variadicUnknownFlags && c.lastVariadicFlag != "" {
+					// We're in variadic collection mode - feed unknown flag to variadic argument
+					if err := c.assignPositional(arg); err != nil {
+						// If variadic assignment fails, fall back to normal unknown handling
+						if cfg.ignoreUnknown {
+							c.unknownArgs = append(c.unknownArgs, arg)
+						} else {
+							return err
+						}
+					}
+					i++
+					continue
+				}
+
 				if cfg.ignoreUnknown {
 					c.unknownArgs = append(c.unknownArgs, arg)
 					i++
@@ -423,21 +439,21 @@ func (c *Cmd) hasNumberShorts() bool {
 	return false
 }
 
-func (c *Cmd) parseFlag(args []string, index int, numberShortsMode bool) (int, error) {
+func (c *Cmd) parseFlag(args []string, index int, numberShortsMode bool, cfg *parseCfg) (int, error) {
 	arg := args[index]
 
 	if strings.HasPrefix(arg, "--") {
 		// Long flag
-		return c.parseLongFlag(args, index)
+		return c.parseLongFlag(args, index, cfg)
 	} else if strings.HasPrefix(arg, "-") {
 		// Short flag(s)
-		return c.parseShortFlag(args, index, numberShortsMode)
+		return c.parseShortFlag(args, index, numberShortsMode, cfg)
 	}
 
 	return 0, fmt.Errorf("invalid flag: %s", arg)
 }
 
-func (c *Cmd) parseLongFlag(args []string, index int) (int, error) {
+func (c *Cmd) parseLongFlag(args []string, index int, cfg *parseCfg) (int, error) {
 	arg := args[index]
 	flagName := arg[2:] // remove --
 
@@ -521,7 +537,7 @@ func (c *Cmd) parseLongFlag(args []string, index int) (int, error) {
 			}
 			return 1, err
 		}
-		consumed, err := c.parseSliceFlag(args, index, f)
+		consumed, err := c.parseSliceFlag(args, index, f, cfg)
 		if err == nil && f.Variadic {
 			c.lastVariadicFlag = flagName
 		}
@@ -555,7 +571,7 @@ func (c *Cmd) parseLongFlag(args []string, index int) (int, error) {
 	return 0, NewProgrammingError(fmt.Sprintf("unsupported flag type for: %s", flagName))
 }
 
-func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool) (int, error) {
+func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cfg *parseCfg) (int, error) {
 	arg := args[index]
 	shorts := arg[1:] // remove -
 
@@ -788,7 +804,7 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool) (i
 					consumed = 1
 				} else {
 					// Use parseSliceFlag for next argument(s)
-					consumed, err := c.parseSliceFlag(args, index, f)
+					consumed, err := c.parseSliceFlag(args, index, f, cfg)
 					if err != nil {
 						return 0, err
 					}
@@ -1201,7 +1217,7 @@ func (c *Cmd) parseBoolValue(value string) (bool, error) {
 	return val, nil
 }
 
-func (c *Cmd) parseSliceFlag(args []string, index int, f *StringSliceFlag) (int, error) {
+func (c *Cmd) parseSliceFlag(args []string, index int, f *StringSliceFlag, cfg *parseCfg) (int, error) {
 	if !f.Variadic {
 		// Single value
 		if index+1 >= len(args) {
@@ -1213,7 +1229,22 @@ func (c *Cmd) parseSliceFlag(args []string, index int, f *StringSliceFlag) (int,
 	// Variadic - consume until next flag
 	consumed := 1
 	for i := index + 1; i < len(args); i++ {
-		if strings.HasPrefix(args[i], "-") {
+		arg := args[i]
+		if strings.HasPrefix(arg, "-") {
+			// Check if this might be an unknown flag that should be collected
+			if cfg.variadicUnknownFlags {
+				// Try to parse as flag - if it fails, it's unknown and should be collected
+				_, err := c.parseFlag(args, i, false, cfg)
+				if err != nil {
+					// Unknown flag - collect it into variadic
+					if _, err := c.appendStringSliceValue(f, arg); err != nil {
+						return 0, err
+					}
+					consumed++
+					continue
+				}
+			}
+			// Known flag or not collecting unknown flags - stop variadic collection
 			break
 		}
 		if _, err := c.appendStringSliceValue(f, args[i]); err != nil {

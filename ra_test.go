@@ -4223,3 +4223,146 @@ func Test_BooleanBehaviorDebug(t *testing.T) {
 	err = cmd.ParseOrError([]string{"--test", "false"})
 	t.Logf("Test 3: --test false -> err=%v, flag=%v", err, *flag)
 }
+
+// TDD Tests for WithVariadicUnknownFlags feature
+
+func Test_VariadicUnknownFlags_BasicCollection(t *testing.T) {
+	// Test: unknown flags should be collected into variadic args while in variadic collection mode
+	// Example: rad ./test.rad list files -p --color=never
+	// Expected: command="list", options=["files", "-p"], capitalize=false, --color absorbed globally
+	fs := NewCmd("test")
+
+	command, _ := NewString("command").Register(fs)
+	options, _ := NewStringSlice("options").SetVariadic(true).Register(fs)
+	capitalize, _ := NewBool("capitalize").SetShort("c").Register(fs)
+
+	// This should work: unknown flag -p collected into variadic options
+	err := fs.ParseOrError([]string{"list", "files", "-p"}, WithVariadicUnknownFlags(true))
+	assert.Nil(t, err)
+	assert.Equal(t, "list", *command)
+	assert.Equal(t, []string{"files", "-p"}, *options)
+	assert.Equal(t, false, *capitalize)
+}
+
+func Test_VariadicUnknownFlags_KnownFlagStopsCollection(t *testing.T) {
+	// Test: known flag should stop variadic collection, after which unknown flags should error
+	// Example: rad ./test.rad list files -c -p
+	// Expected: command="list", options=["files"], capitalize=true, then -p should error
+	fs := NewCmd("test")
+
+	_, _ = NewString("command").Register(fs)
+	_, _ = NewStringSlice("options").SetVariadic(true).Register(fs)
+	_, _ = NewBool("capitalize").SetShort("c").Register(fs)
+
+	// This should error: -c stops variadic collection, then -p is unknown
+	err := fs.ParseOrError([]string{"list", "files", "-c", "-p"}, WithVariadicUnknownFlags(true))
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "unknown")
+	assert.Contains(t, err.Error(), "p")
+}
+
+func Test_VariadicUnknownFlags_CorrectOrder(t *testing.T) {
+	// Test: unknown flags before known flag should be collected
+	// Example: rad ./test.rad list files -p -c
+	// Expected: command="list", options=["files", "-p"], capitalize=true
+	fs := NewCmd("test")
+
+	command, _ := NewString("command").Register(fs)
+	options, _ := NewStringSlice("options").SetVariadic(true).Register(fs)
+	capitalize, _ := NewBool("capitalize").SetShort("c").Register(fs)
+
+	err := fs.ParseOrError([]string{"list", "files", "-p", "-c"}, WithVariadicUnknownFlags(true))
+	assert.Nil(t, err)
+	assert.Equal(t, "list", *command)
+	assert.Equal(t, []string{"files", "-p"}, *options)
+	assert.Equal(t, true, *capitalize)
+}
+
+func Test_VariadicUnknownFlags_WithoutOption(t *testing.T) {
+	// Test: without WithVariadicUnknownFlags(true), unknown flags should still error normally
+	fs := NewCmd("test")
+
+	_, _ = NewString("command").Register(fs)
+	_, _ = NewStringSlice("options").SetVariadic(true).Register(fs)
+	_, _ = NewBool("capitalize").SetShort("c").Register(fs)
+
+	// This should error: -p is unknown and we don't have WithVariadicUnknownFlags(true)
+	err := fs.ParseOrError([]string{"list", "files", "-p"})
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "unknown")
+}
+
+func Test_VariadicUnknownFlags_MultipleUnknownFlags(t *testing.T) {
+	// Test: multiple unknown flags and values collected into variadic
+	fs := NewCmd("test")
+
+	command, _ := NewString("command").Register(fs)
+	options, _ := NewStringSlice("options").SetVariadic(true).Register(fs)
+	capitalize, _ := NewBool("capitalize").SetShort("c").Register(fs)
+
+	err := fs.ParseOrError([]string{"list", "files", "-p", "--verbose", "extra", "-c"}, WithVariadicUnknownFlags(true))
+	assert.Nil(t, err)
+	assert.Equal(t, "list", *command)
+	assert.Equal(t, []string{"files", "-p", "--verbose", "extra"}, *options)
+	assert.Equal(t, true, *capitalize)
+}
+
+func Test_VariadicUnknownFlags_NoVariadicArgs(t *testing.T) {
+	// Test: when no variadic args present, unknown flags should error even with WithVariadicUnknownFlags(true)
+	fs := NewCmd("test")
+
+	_, _ = NewString("command").Register(fs)
+	_, _ = NewBool("capitalize").SetShort("c").Register(fs)
+
+	err := fs.ParseOrError([]string{"list", "-p"}, WithVariadicUnknownFlags(true))
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "unknown")
+}
+
+func Test_VariadicUnknownFlags_PositionalVariadic(t *testing.T) {
+	// Test: positional variadic should also collect unknown flags
+	fs := NewCmd("test")
+
+	command, _ := NewString("command").Register(fs)
+	files, _ := NewStringSlice("files").SetVariadic(true).Register(fs) // positional variadic
+	verbose, _ := NewBool("verbose").SetShort("v").Register(fs)
+
+	err := fs.ParseOrError([]string{"list", "file1", "-p", "--unknown", "file2", "-v"}, WithVariadicUnknownFlags(true))
+	assert.Nil(t, err)
+	assert.Equal(t, "list", *command)
+	assert.Equal(t, []string{"file1", "-p", "--unknown", "file2"}, *files)
+	assert.Equal(t, true, *verbose)
+}
+
+func Test_VariadicUnknownFlags_FlagVariadic(t *testing.T) {
+	// Test: flag-based variadic should also collect unknown flags
+	fs := NewCmd("test")
+
+	command, _ := NewString("command").Register(fs)
+	options, _ := NewStringSlice("options").SetVariadic(true).Register(fs) // can be used as --options
+	verbose, _ := NewBool("verbose").SetShort("v").Register(fs)
+
+	err := fs.ParseOrError([]string{"list", "--options", "val1", "-p", "--unknown", "val2", "-v"}, WithVariadicUnknownFlags(true))
+	assert.Nil(t, err)
+	assert.Equal(t, "list", *command)
+	assert.Equal(t, []string{"val1", "-p", "--unknown", "val2"}, *options)
+	assert.Equal(t, true, *verbose)
+}
+
+func Test_VariadicUnknownFlags_CombinedWithIgnoreUnknown(t *testing.T) {
+	// Test: WithVariadicUnknownFlags should take precedence over WithIgnoreUnknown when variadic is active
+	// Unknown flags should go to variadic, not to GetUnknownArgs()
+	fs := NewCmd("test")
+
+	command, _ := NewString("command").Register(fs)
+	options, _ := NewStringSlice("options").SetVariadic(true).Register(fs)
+
+	err := fs.ParseOrError([]string{"list", "files", "-p"}, WithVariadicUnknownFlags(true), WithIgnoreUnknown(true))
+	assert.Nil(t, err)
+	assert.Equal(t, "list", *command)
+	assert.Equal(t, []string{"files", "-p"}, *options)
+
+	// Unknown args should be empty since -p went to variadic
+	unknownArgs := fs.GetUnknownArgs()
+	assert.Equal(t, []string{}, unknownArgs)
+}

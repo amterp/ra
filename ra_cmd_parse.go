@@ -1019,36 +1019,100 @@ func (c *Cmd) assignPositionalWithMode(value string, positionalOnlyMode bool) er
 				continue
 			}
 			if f.Variadic {
-				// Variadic positional - collect if this is the current one or no flag seen since last variadic
-				if c.lastVariadicFlag == name {
-					c.configured[name] = true
+				handled, err := c.handleVariadicSliceFlag(name, value, positionalOnlyMode, func() error {
 					_, err := c.appendStringSliceValue(f, value)
 					return err
-				}
-				// In positional-only mode (after --), continue appending to any configured variadic flag
-				if positionalOnlyMode && c.configured[name] {
-					_, err := c.appendStringSliceValue(f, value)
+				})
+				if handled {
 					return err
 				}
-				// If we saw a flag since last variadic, skip variadic flags that have already been used
-				if c.sawFlag && c.configured[name] {
-					continue
-				}
-				// Start new variadic only if we haven't seen a flag or this is a new variadic
-				if !c.sawFlag || c.lastVariadicFlag == "" {
-					c.configured[name] = true
-					c.lastVariadicFlag = name
-					_, err := c.appendStringSliceValue(f, value)
-					return err
-				}
-				// Skip this variadic if we've seen a flag
-				continue
+				continue // Skip this variadic if not handled
 			}
 			if c.configured[name] {
 				continue // Already assigned
 			}
 			c.configured[name] = true
 			_, err := c.appendStringSliceValue(f, value)
+			return err
+		case *IntSliceFlag:
+			if f.FlagOnly {
+				continue
+			}
+			if f.Variadic {
+				handled, err := c.handleVariadicSliceFlag(name, value, positionalOnlyMode, func() error {
+					_, err := c.appendIntSliceValue(f, value)
+					return err
+				})
+				if handled {
+					return err
+				}
+				continue // Skip this variadic if not handled
+			}
+			if c.configured[name] {
+				continue // Already assigned
+			}
+			c.configured[name] = true
+			_, err := c.appendIntSliceValue(f, value)
+			return err
+		case *Int64SliceFlag:
+			if f.FlagOnly {
+				continue
+			}
+			if f.Variadic {
+				handled, err := c.handleVariadicSliceFlag(name, value, positionalOnlyMode, func() error {
+					_, err := c.appendInt64SliceValue(f, value)
+					return err
+				})
+				if handled {
+					return err
+				}
+				continue // Skip this variadic if not handled
+			}
+			if c.configured[name] {
+				continue // Already assigned
+			}
+			c.configured[name] = true
+			_, err := c.appendInt64SliceValue(f, value)
+			return err
+		case *Float64SliceFlag:
+			if f.FlagOnly {
+				continue
+			}
+			if f.Variadic {
+				handled, err := c.handleVariadicSliceFlag(name, value, positionalOnlyMode, func() error {
+					_, err := c.appendFloat64SliceValue(f, value)
+					return err
+				})
+				if handled {
+					return err
+				}
+				continue // Skip this variadic if not handled
+			}
+			if c.configured[name] {
+				continue // Already assigned
+			}
+			c.configured[name] = true
+			_, err := c.appendFloat64SliceValue(f, value)
+			return err
+		case *BoolSliceFlag:
+			if f.FlagOnly {
+				continue
+			}
+			if f.Variadic {
+				handled, err := c.handleVariadicSliceFlag(name, value, positionalOnlyMode, func() error {
+					_, err := c.appendBoolSliceValue(f, value)
+					return err
+				})
+				if handled {
+					return err
+				}
+				continue // Skip this variadic if not handled
+			}
+			if c.configured[name] {
+				continue // Already assigned
+			}
+			c.configured[name] = true
+			_, err := c.appendBoolSliceValue(f, value)
 			return err
 		}
 	}
@@ -1062,6 +1126,37 @@ func (c *Cmd) assignPositionalWithMode(value string, positionalOnlyMode bool) er
 	}
 
 	return fmt.Errorf("Too many positional arguments. Unused: [%s]", value)
+}
+
+// handleVariadicSliceFlag handles the common logic for variadic slice flags
+// Returns (handled, error) where handled indicates if the flag was processed
+func (c *Cmd) handleVariadicSliceFlag(
+	name string,
+	value string,
+	positionalOnlyMode bool,
+	appendFunc func() error,
+) (bool, error) {
+	// Variadic positional - collect if this is the current one or no flag seen since last variadic
+	if c.lastVariadicFlag == name {
+		c.configured[name] = true
+		return true, appendFunc()
+	}
+	// In positional-only mode (after --), continue appending to any configured variadic flag
+	if positionalOnlyMode && c.configured[name] {
+		return true, appendFunc()
+	}
+	// If we saw a flag since last variadic, skip variadic flags that have already been used
+	if c.sawFlag && c.configured[name] {
+		return false, nil // Skip this variadic
+	}
+	// Start new variadic only if we haven't seen a flag or this is a new variadic
+	if !c.sawFlag || c.lastVariadicFlag == "" {
+		c.configured[name] = true
+		c.lastVariadicFlag = name
+		return true, appendFunc()
+	}
+	// Skip this variadic if we've seen a flag
+	return false, nil
 }
 
 func (c *Cmd) setStringValue(f *StringFlag, value string) error {
@@ -1257,12 +1352,36 @@ func (c *Cmd) parseSliceFlag(args []string, index int, f *StringSliceFlag, cfg *
 }
 
 func (c *Cmd) appendStringSliceValue(f *StringSliceFlag, value string) (int, error) {
+	// Check if this is the first user-provided value and we should replace defaults
+	shouldReplace := false
+	if f.Default != nil {
+		// Check if current value equals the default value - if so, this is the first user input
+		if len(*f.Value) == len(*f.Default) {
+			equal := true
+			for i, v := range *f.Value {
+				if v != (*f.Default)[i] {
+					equal = false
+					break
+				}
+			}
+			if equal {
+				shouldReplace = true
+			}
+		}
+	}
+
 	if f.Separator != nil {
 		parts := strings.Split(value, *f.Separator)
+		if shouldReplace {
+			*f.Value = make([]string, 0, len(parts))
+		}
 		for _, part := range parts {
 			*f.Value = append(*f.Value, part)
 		}
 	} else {
+		if shouldReplace {
+			*f.Value = make([]string, 0, 1)
+		}
 		*f.Value = append(*f.Value, value)
 	}
 	return 2, nil
@@ -1293,8 +1412,29 @@ func (c *Cmd) parseIntSliceFlag(args []string, index int, f *IntSliceFlag) (int,
 }
 
 func (c *Cmd) appendIntSliceValue(f *IntSliceFlag, value string) (int, error) {
+	// Check if this is the first user-provided value and we should replace defaults
+	shouldReplace := false
+	if f.Default != nil {
+		// Check if current value equals the default value - if so, this is the first user input
+		if len(*f.Value) == len(*f.Default) {
+			equal := true
+			for i, v := range *f.Value {
+				if v != (*f.Default)[i] {
+					equal = false
+					break
+				}
+			}
+			if equal {
+				shouldReplace = true
+			}
+		}
+	}
+
 	if f.Separator != nil {
 		parts := strings.Split(value, *f.Separator)
+		if shouldReplace {
+			*f.Value = make([]int, 0, len(parts))
+		}
 		for _, part := range parts {
 			val, err := strconv.Atoi(part)
 			if err != nil {
@@ -1303,6 +1443,9 @@ func (c *Cmd) appendIntSliceValue(f *IntSliceFlag, value string) (int, error) {
 			*f.Value = append(*f.Value, val)
 		}
 	} else {
+		if shouldReplace {
+			*f.Value = make([]int, 0, 1)
+		}
 		val, err := strconv.Atoi(value)
 		if err != nil {
 			return 0, fmt.Errorf("invalid integer value for %s: %s", f.Name, value)
@@ -1337,8 +1480,29 @@ func (c *Cmd) parseInt64SliceFlag(args []string, index int, f *Int64SliceFlag) (
 }
 
 func (c *Cmd) appendInt64SliceValue(f *Int64SliceFlag, value string) (int, error) {
+	// Check if this is the first user-provided value and we should replace defaults
+	shouldReplace := false
+	if f.Default != nil {
+		// Check if current value equals the default value - if so, this is the first user input
+		if len(*f.Value) == len(*f.Default) {
+			equal := true
+			for i, v := range *f.Value {
+				if v != (*f.Default)[i] {
+					equal = false
+					break
+				}
+			}
+			if equal {
+				shouldReplace = true
+			}
+		}
+	}
+
 	if f.Separator != nil {
 		parts := strings.Split(value, *f.Separator)
+		if shouldReplace {
+			*f.Value = make([]int64, 0, len(parts))
+		}
 		for _, part := range parts {
 			val, err := strconv.ParseInt(part, 10, 64)
 			if err != nil {
@@ -1347,6 +1511,9 @@ func (c *Cmd) appendInt64SliceValue(f *Int64SliceFlag, value string) (int, error
 			*f.Value = append(*f.Value, val)
 		}
 	} else {
+		if shouldReplace {
+			*f.Value = make([]int64, 0, 1)
+		}
 		val, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return 0, fmt.Errorf("invalid int64 value for %s: %s", f.Name, value)
@@ -1381,8 +1548,29 @@ func (c *Cmd) parseFloat64SliceFlag(args []string, index int, f *Float64SliceFla
 }
 
 func (c *Cmd) appendFloat64SliceValue(f *Float64SliceFlag, value string) (int, error) {
+	// Check if this is the first user-provided value and we should replace defaults
+	shouldReplace := false
+	if f.Default != nil {
+		// Check if current value equals the default value - if so, this is the first user input
+		if len(*f.Value) == len(*f.Default) {
+			equal := true
+			for i, v := range *f.Value {
+				if v != (*f.Default)[i] {
+					equal = false
+					break
+				}
+			}
+			if equal {
+				shouldReplace = true
+			}
+		}
+	}
+
 	if f.Separator != nil {
 		parts := strings.Split(value, *f.Separator)
+		if shouldReplace {
+			*f.Value = make([]float64, 0, len(parts))
+		}
 		for _, part := range parts {
 			val, err := strconv.ParseFloat(part, 64)
 			if err != nil {
@@ -1391,6 +1579,9 @@ func (c *Cmd) appendFloat64SliceValue(f *Float64SliceFlag, value string) (int, e
 			*f.Value = append(*f.Value, val)
 		}
 	} else {
+		if shouldReplace {
+			*f.Value = make([]float64, 0, 1)
+		}
 		val, err := strconv.ParseFloat(value, 64)
 		if err != nil {
 			return 0, fmt.Errorf("invalid float64 value for %s: %s", f.Name, value)
@@ -1425,8 +1616,29 @@ func (c *Cmd) parseBoolSliceFlag(args []string, index int, f *BoolSliceFlag) (in
 }
 
 func (c *Cmd) appendBoolSliceValue(f *BoolSliceFlag, value string) (int, error) {
+	// Check if this is the first user-provided value and we should replace defaults
+	shouldReplace := false
+	if f.Default != nil {
+		// Check if current value equals the default value - if so, this is the first user input
+		if len(*f.Value) == len(*f.Default) {
+			equal := true
+			for i, v := range *f.Value {
+				if v != (*f.Default)[i] {
+					equal = false
+					break
+				}
+			}
+			if equal {
+				shouldReplace = true
+			}
+		}
+	}
+
 	if f.Separator != nil {
 		parts := strings.Split(value, *f.Separator)
+		if shouldReplace {
+			*f.Value = make([]bool, 0, len(parts))
+		}
 		for _, part := range parts {
 			val, err := strconv.ParseBool(part)
 			if err != nil {
@@ -1442,6 +1654,9 @@ func (c *Cmd) appendBoolSliceValue(f *BoolSliceFlag, value string) (int, error) 
 			*f.Value = append(*f.Value, val)
 		}
 	} else {
+		if shouldReplace {
+			*f.Value = make([]bool, 0, 1)
+		}
 		val, err := strconv.ParseBool(value)
 		if err != nil {
 			// Try parsing as 0/1

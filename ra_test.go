@@ -802,6 +802,61 @@ func Test_ExamplePositionalVariadicMultiple(t *testing.T) {
 	assert.Equal(t, []string{"bbb", "ccc"}, *arg2)
 }
 
+// Example: mycmd (int positional variadic - empty)
+func Test_ExamplePositionalVariadicIntEmpty(t *testing.T) {
+	fs := NewCmd("mycmd")
+
+	nums, _ := NewInt64Slice("nums").SetVariadic(true).Register(fs)
+
+	err := fs.ParseOrError([]string{})
+	assert.Nil(t, err)
+	assert.Equal(t, []int64{}, *nums)
+}
+
+// Example: mycmd 1 (int positional variadic - single item)
+func Test_ExamplePositionalVariadicIntSingle(t *testing.T) {
+	fs := NewCmd("mycmd")
+
+	nums, _ := NewInt64Slice("nums").SetVariadic(true).Register(fs)
+
+	err := fs.ParseOrError([]string{"1"})
+	assert.Nil(t, err)
+	assert.Equal(t, []int64{1}, *nums)
+}
+
+// Example: mycmd 1 2 3 (int positional variadic - multiple items)
+func Test_ExamplePositionalVariadicIntMultiple(t *testing.T) {
+	fs := NewCmd("mycmd")
+
+	nums, _ := NewInt64Slice("nums").SetVariadic(true).Register(fs)
+
+	err := fs.ParseOrError([]string{"1", "2", "3"})
+	assert.Nil(t, err)
+	assert.Equal(t, []int64{1, 2, 3}, *nums)
+}
+
+// Example: mycmd (float positional variadic - empty)
+func Test_ExamplePositionalVariadicFloatEmpty(t *testing.T) {
+	fs := NewCmd("mycmd")
+
+	values, _ := NewFloat64Slice("values").SetVariadic(true).Register(fs)
+
+	err := fs.ParseOrError([]string{})
+	assert.Nil(t, err)
+	assert.Equal(t, []float64{}, *values)
+}
+
+// Example: mycmd 1.5 2.5 (float positional variadic - multiple items)
+func Test_ExamplePositionalVariadicFloatMultiple(t *testing.T) {
+	fs := NewCmd("mycmd")
+
+	values, _ := NewFloat64Slice("values").SetVariadic(true).Register(fs)
+
+	err := fs.ParseOrError([]string{"1.5", "2.5"})
+	assert.Nil(t, err)
+	assert.Equal(t, []float64{1.5, 2.5}, *values)
+}
+
 // Example: mycmd aaa --arg2 (variadic flags - empty)
 func Test_ExampleVariadicFlagEmpty(t *testing.T) {
 	fs := NewCmd("mycmd")
@@ -4342,7 +4397,10 @@ func Test_VariadicUnknownFlags_FlagVariadic(t *testing.T) {
 	options, _ := NewStringSlice("options").SetVariadic(true).Register(fs) // can be used as --options
 	verbose, _ := NewBool("verbose").SetShort("v").Register(fs)
 
-	err := fs.ParseOrError([]string{"list", "--options", "val1", "-p", "--unknown", "val2", "-v"}, WithVariadicUnknownFlags(true))
+	err := fs.ParseOrError(
+		[]string{"list", "--options", "val1", "-p", "--unknown", "val2", "-v"},
+		WithVariadicUnknownFlags(true),
+	)
 	assert.Nil(t, err)
 	assert.Equal(t, "list", *command)
 	assert.Equal(t, []string{"val1", "-p", "--unknown", "val2"}, *options)
@@ -4365,4 +4423,77 @@ func Test_VariadicUnknownFlags_CombinedWithIgnoreUnknown(t *testing.T) {
 	// Unknown args should be empty since -p went to variadic
 	unknownArgs := fs.GetUnknownArgs()
 	assert.Equal(t, []string{}, unknownArgs)
+}
+
+// Example: mycmd (bool positional variadic - empty)
+func Test_ExamplePositionalVariadicBoolEmpty(t *testing.T) {
+	fs := NewCmd("mycmd")
+
+	flags, _ := NewBoolSlice("flags").SetVariadic(true).Register(fs)
+
+	err := fs.ParseOrError([]string{})
+	assert.Nil(t, err)
+	assert.Equal(t, []bool{}, *flags)
+}
+
+// Example: mycmd (int positional variadic - empty)
+func Test_ExamplePositionalVariadicIntSliceEmpty(t *testing.T) {
+	fs := NewCmd("mycmd")
+
+	nums, _ := NewIntSlice("nums").SetVariadic(true).Register(fs)
+
+	err := fs.ParseOrError([]string{})
+	assert.Nil(t, err)
+	assert.Equal(t, []int{}, *nums)
+}
+
+func Test_VariadicSliceWithDefaultValues_ShouldReplaceNotAppend(t *testing.T) {
+	// This test verifies that when a variadic slice flag has default values,
+	// user-provided arguments should replace the defaults, not append to them.
+
+	t.Run("StringSlice with defaults - no user args", func(t *testing.T) {
+		fs := NewCmd("test")
+
+		files, err := NewStringSlice("files").
+			SetVariadic(true).
+			SetDefault([]string{"default.txt"}).
+			Register(fs)
+		assert.NoError(t, err)
+
+		parseErr := fs.ParseOrError([]string{})
+		assert.Nil(t, parseErr)
+		assert.Equal(t, []string{"default.txt"}, *files)
+	})
+
+	t.Run("StringSlice with defaults - user provides args", func(t *testing.T) {
+		fs := NewCmd("test")
+
+		files, err := NewStringSlice("files").
+			SetVariadic(true).
+			SetDefault([]string{"default.txt"}).
+			Register(fs)
+		assert.NoError(t, err)
+
+		parseErr := fs.ParseOrError([]string{"--files", "user1.txt", "user2.txt"})
+		assert.Nil(t, parseErr)
+		// Expected: user args should replace defaults, not append to them
+		assert.Equal(t, []string{"user1.txt", "user2.txt"}, *files)
+		// Current behavior would be: []string{"default.txt", "user1.txt", "user2.txt"}
+	})
+
+	t.Run("IntSlice with defaults - user provides args", func(t *testing.T) {
+		fs := NewCmd("test")
+
+		nums, err := NewIntSlice("nums").
+			SetVariadic(true).
+			SetDefault([]int{0, 1}).
+			Register(fs)
+		assert.NoError(t, err)
+
+		parseErr := fs.ParseOrError([]string{"--nums", "5", "10"})
+		assert.Nil(t, parseErr)
+		// Expected: user args should replace defaults, not append to them
+		assert.Equal(t, []int{5, 10}, *nums)
+		// Current behavior would be: []int{0, 1, 5, 10}
+	})
 }

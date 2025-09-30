@@ -605,18 +605,46 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					*f.Value = count
 					return 1, nil
 				}
-				// Single occurrence, needs value
+				// Single occurrence
 				if hasValue {
 					// Use equals value
 					err := c.setIntValue(f, value)
 					return 1, err
 				} else {
-					// Use next argument
-					if index+1 >= len(args) {
-						return 0, fmt.Errorf("flag -%s requires a value", shorts)
+					// Check if next argument exists and is a valid value (not a flag)
+					if index+1 < len(args) && !strings.HasPrefix(args[index+1], "-") {
+						// Next arg is a value, try to parse it
+						err := c.setIntValue(f, args[index+1])
+						return 2, err
+					} else {
+						// No value provided or next arg is a flag, treat as count of 1
+						*f.Value = 1
+						return 1, nil
 					}
-					err := c.setIntValue(f, args[index+1])
-					return 2, err
+				}
+			case *Int64Flag:
+				if len(shorts) > 1 {
+					// Multiple occurrences like -nnn
+					count := len(shorts)
+					*f.Value = int64(count)
+					return 1, nil
+				}
+				// Single occurrence
+				if hasValue {
+					// Use equals value
+					err := c.setInt64Value(f, value)
+					return 1, err
+				} else {
+					// Check if next argument exists and is a valid value (not a flag)
+					if index+1 < len(args) && !strings.HasPrefix(args[index+1], "-") {
+						// Next arg is a value, try to parse it
+						err := c.setInt64Value(f, args[index+1])
+						return 2, err
+					} else {
+						// No value provided or next arg is a flag, treat as count of 1
+						*f.Value = 1
+						return 1, nil
+					}
 				}
 			case *StringFlag:
 				if hasValue {
@@ -708,7 +736,7 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 			}
 		}
 		if allSame {
-			// All chars are the same, check if it's an int flag
+			// All chars are the same, check if it's an int or int64 flag
 			if flagName, exists := c.shortToName[string(firstChar)]; exists {
 				if flag, exists := c.flags[flagName]; exists {
 					if intFlag, ok := flag.(*IntFlag); ok {
@@ -720,6 +748,18 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 						} else {
 							// This is an int flag being repeated, set it to the count
 							*intFlag.Value = len(shorts)
+							return 1, nil
+						}
+					}
+					if int64Flag, ok := flag.(*Int64Flag); ok {
+						c.configured[flagName] = true
+						if hasValue {
+							// Explicit equals value takes precedence over counting
+							err := c.setInt64Value(int64Flag, value)
+							return 1, err
+						} else {
+							// This is an int64 flag being repeated, set it to the count
+							*int64Flag.Value = int64(len(shorts))
 							return 1, nil
 						}
 					}
@@ -776,15 +816,19 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					}
 					consumed = 1
 				} else {
-					// Use next argument
-					if index+1 >= len(args) {
-						return 0, fmt.Errorf("flag -%s requires a value", shortStr)
+					// Check if next argument exists and is a valid value (not a flag)
+					if index+1 < len(args) && !strings.HasPrefix(args[index+1], "-") {
+						// Next arg is a value, try to parse it
+						err := c.setIntValue(f, args[index+1])
+						if err != nil {
+							return 0, err
+						}
+						consumed = 2
+					} else {
+						// No value provided or next arg is a flag, treat as count of 1
+						*f.Value = 1
+						consumed = 1
 					}
-					err := c.setIntValue(f, args[index+1])
-					if err != nil {
-						return 0, err
-					}
-					consumed = 2
 				}
 			} else {
 				return 0, fmt.Errorf("non-bool flag -%s must be last in cluster", shortStr)
@@ -827,15 +871,19 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					}
 					consumed = 1
 				} else {
-					// Use next argument
-					if index+1 >= len(args) {
-						return 0, fmt.Errorf("flag -%s requires a value", shortStr)
+					// Check if next argument exists and is a valid value (not a flag)
+					if index+1 < len(args) && !strings.HasPrefix(args[index+1], "-") {
+						// Next arg is a value, try to parse it
+						err := c.setInt64Value(f, args[index+1])
+						if err != nil {
+							return 0, err
+						}
+						consumed = 2
+					} else {
+						// No value provided or next arg is a flag, treat as count of 1
+						*f.Value = 1
+						consumed = 1
 					}
-					err := c.setInt64Value(f, args[index+1])
-					if err != nil {
-						return 0, err
-					}
-					consumed = 2
 				}
 			} else {
 				return 0, fmt.Errorf("non-bool flag -%s must be last in cluster", shortStr)

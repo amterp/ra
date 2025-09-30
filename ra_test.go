@@ -731,6 +731,80 @@ func Test_ExampleIncrementingIntShorts(t *testing.T) {
 	assert.Equal(t, 3, *arg1)
 }
 
+// Test int shorts with double clusters (later overrides earlier)
+func Test_IntShortsCounting_DoubleClusters(t *testing.T) {
+	fs := NewCmd("mycmd")
+
+	arg1, _ := NewInt("arg1").SetShort("a").SetDefault(0).Register(fs)
+
+	// -a -aaa should result in 3 (last cluster wins)
+	err := fs.ParseOrError([]string{"-a", "-aaa"})
+	assert.Nil(t, err)
+	assert.Equal(t, 3, *arg1)
+}
+
+// Example: mycmd -n -nnn (incrementing int64 shorts)
+func Test_ExampleIncrementingInt64Shorts(t *testing.T) {
+	fs := NewCmd("mycmd")
+
+	arg1, _ := NewInt64("arg1").SetShort("n").SetDefault(int64(0)).Register(fs)
+
+	// Test counting with -nnn
+	err := fs.ParseOrError([]string{"-n", "-nnn"})
+	assert.Nil(t, err)
+	assert.Equal(t, int64(3), *arg1)
+}
+
+// Test that later occurrences override earlier ones for int64 counting
+func Test_Int64ShortsCounting_LaterOverridesEarlier(t *testing.T) {
+	fs := NewCmd("mycmd")
+
+	arg1, _ := NewInt64("arg1").SetShort("n").SetDefault(int64(0)).Register(fs)
+
+	// -nn -n should result in 1 (last occurrence wins)
+	err := fs.ParseOrError([]string{"-nn", "-n", "5"})
+	assert.Nil(t, err)
+	assert.Equal(t, int64(5), *arg1)
+}
+
+// Test int64 shorts counting with various cluster sizes
+func Test_Int64ShortsCounting_VariousSizes(t *testing.T) {
+	fs := NewCmd("mycmd")
+
+	arg1, _ := NewInt64("arg1").SetShort("v").Register(fs)
+
+	// Single flag
+	err := fs.ParseOrError([]string{"-v", "10"})
+	assert.Nil(t, err)
+	assert.Equal(t, int64(10), *arg1)
+
+	// Double flag
+	fs = NewCmd("mycmd")
+	arg1, _ = NewInt64("arg1").SetShort("v").Register(fs)
+	err = fs.ParseOrError([]string{"-vv"})
+	assert.Nil(t, err)
+	assert.Equal(t, int64(2), *arg1)
+
+	// Five flags
+	fs = NewCmd("mycmd")
+	arg1, _ = NewInt64("arg1").SetShort("v").Register(fs)
+	err = fs.ParseOrError([]string{"-vvvvv"})
+	assert.Nil(t, err)
+	assert.Equal(t, int64(5), *arg1)
+}
+
+// Test int64 shorts counting with equals override
+func Test_Int64ShortsCounting_WithEqualsOverride(t *testing.T) {
+	fs := NewCmd("mycmd")
+
+	arg1, _ := NewInt64("arg1").SetShort("v").Register(fs)
+
+	// -vvv=10 should use the explicit value 10, not count
+	err := fs.ParseOrError([]string{"-vvv=10"})
+	assert.Nil(t, err)
+	assert.Equal(t, int64(10), *arg1)
+}
+
 // Example: mycmd -1 --arg2 -2 -3.4 (negative numbers without number shorts mode)
 func Test_ExampleNegativeNumbers(t *testing.T) {
 	fs := NewCmd("mycmd")

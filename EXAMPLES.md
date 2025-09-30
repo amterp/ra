@@ -84,13 +84,12 @@ mycmd -abc ddd  # last flag 'c' is a non-bool and so will read 'ddd'
 
 ## Incrementing int shorts
 
-- Always treat these as normal int args, with int behavior.
-- Only changes:
-  - If short flag specified at the end, even once, it does not require an arg; its value will be its count.
-  - If specified 2 or more times in a cluster, we will not try to parse the *next* arg as part of the int arg.
+Int and Int64 flags support clustered short flag counting:
+- When the same short flag is repeated (e.g., `-vvv`), the value is set to the count of repetitions
+- Explicit values override counting (e.g., `-vvv=10` sets value to 10, not 3)
+- Later occurrences override earlier ones (e.g., `-vv -v 5` sets value to 5)
 
-^^ TODO maybe not... maybe we just need an IsCounter toggle which makes it never interact with neighboring args
-
+**Basic counting:**
 ```sh
 mycmd -aaa
 ```
@@ -99,24 +98,43 @@ mycmd -aaa
 |-------------------------------------|-------|
 | `arg1: int`, short `a`, default `0` | `3`   |
 
+**Single flag with explicit value:**
 ```sh
 mycmd -a 3
 ```
 
 | Declared Arg                        | Value |
 |-------------------------------------|-------|
-| `arg1: int`, short `a`, default `0` | ?     |
-| `arg2: str`                         | ?     |
+| `arg1: int`, short `a`, default `0` | `3`   |
 
+**Counting with two repetitions:**
 ```sh
-mycmd -aa 3
+mycmd -aa
 ```
 
 | Declared Arg                        | Value |
 |-------------------------------------|-------|
-| `arg1: int`, short `a`, default `0` | ?     |
-| `arg2: str`                         | ?     |
+| `arg1: int`, short `a`, default `0` | `2`   |
 
+**Explicit value overrides counting:**
+```sh
+mycmd -aaa=10
+```
+
+| Declared Arg                        | Value |
+|-------------------------------------|-------|
+| `arg1: int`, short `a`, default `0` | `10`  |
+
+**Int64 flags work the same way:**
+```sh
+mycmd -nnn
+```
+
+| Declared Arg                          | Value |
+|---------------------------------------|-------|
+| `arg1: int64`, short `n`, default `0` | `3`   |
+
+**Error case - non-integer value:**
 ```sh
 mycmd -a bbb
 ```

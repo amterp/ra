@@ -4499,6 +4499,67 @@ func Test_VariadicUnknownFlags_CombinedWithIgnoreUnknown(t *testing.T) {
 	assert.Equal(t, []string{}, unknownArgs)
 }
 
+func Test_VariadicUnknownFlags_UnknownFlagBeforePositionalArgs(t *testing.T) {
+	// Test: unknown flag BEFORE any positional args should be consumed by variadic positional
+	// This is the case: radd test.rad -U (where extras is variadic positional)
+	// Expected: extras=["-U"], build=false
+	fs := NewCmd("test")
+
+	extras, _ := NewStringSlice("extras").SetVariadic(true).Register(fs)
+	build, _ := NewBool("build").SetShort("b").Register(fs)
+
+	err := fs.ParseOrError([]string{"-U"}, WithVariadicUnknownFlags(true))
+	assert.Nil(t, err)
+	assert.Equal(t, []string{"-U"}, *extras)
+	assert.Equal(t, false, *build)
+}
+
+func Test_VariadicUnknownFlags_MultipleVariadicPositionals(t *testing.T) {
+	// Test: with multiple variadic positionals, unknown flag goes to first unassigned
+	fs := NewCmd("test")
+
+	extras1, _ := NewStringSlice("extras1").SetVariadic(true).Register(fs)
+	extras2, _ := NewStringSlice("extras2").SetVariadic(true).Register(fs)
+	build, _ := NewBool("build").SetShort("b").Register(fs)
+
+	// Unknown flag should go to first variadic
+	err := fs.ParseOrError([]string{"-U"}, WithVariadicUnknownFlags(true))
+	assert.Nil(t, err)
+	assert.Equal(t, []string{"-U"}, *extras1)
+	assert.Equal(t, []string{}, *extras2)
+	assert.Equal(t, false, *build)
+}
+
+func Test_VariadicUnknownFlags_MultipleVariadicPositionals_KnownThenUnknown(t *testing.T) {
+	// Test: known flag first, then unknown flag still activates first variadic
+	fs := NewCmd("test")
+
+	extras1, _ := NewStringSlice("extras1").SetVariadic(true).Register(fs)
+	extras2, _ := NewStringSlice("extras2").SetVariadic(true).Register(fs)
+	build, _ := NewBool("build").SetShort("b").Register(fs)
+
+	err := fs.ParseOrError([]string{"-b", "-U"}, WithVariadicUnknownFlags(true))
+	assert.Nil(t, err)
+	assert.Equal(t, true, *build)
+	assert.Equal(t, []string{"-U"}, *extras1)
+	assert.Equal(t, []string{}, *extras2)
+}
+
+func Test_VariadicUnknownFlags_MultipleVariadicPositionals_UnknownKnownUnknown(t *testing.T) {
+	// Test: unknown, known flag (resets variadic), unknown activates second variadic
+	fs := NewCmd("test")
+
+	extras1, _ := NewStringSlice("extras1").SetVariadic(true).Register(fs)
+	extras2, _ := NewStringSlice("extras2").SetVariadic(true).Register(fs)
+	build, _ := NewBool("build").SetShort("b").Register(fs)
+
+	err := fs.ParseOrError([]string{"-U", "-b", "-X"}, WithVariadicUnknownFlags(true))
+	assert.Nil(t, err)
+	assert.Equal(t, []string{"-U"}, *extras1)
+	assert.Equal(t, true, *build)
+	assert.Equal(t, []string{"-X"}, *extras2)
+}
+
 // Example: mycmd (bool positional variadic - empty)
 func Test_ExamplePositionalVariadicBoolEmpty(t *testing.T) {
 	fs := NewCmd("mycmd")

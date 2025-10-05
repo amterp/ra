@@ -273,18 +273,33 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 				}
 
 				// Handle unknown flags
-				if cfg.variadicUnknownFlags && c.lastVariadicFlag != "" {
-					// We're in variadic collection mode - feed unknown flag to variadic argument
-					if err := c.assignPositional(arg); err != nil {
-						// If variadic assignment fails, fall back to normal unknown handling
-						if cfg.ignoreUnknown {
-							c.unknownArgs = append(c.unknownArgs, arg)
-						} else {
-							return err
-						}
+				if cfg.variadicUnknownFlags {
+					// Check if we have an active variadic or an unassigned variadic positional.
+					// This allows variadics to be "activated" in two ways:
+					//   1. Already active (lastVariadicFlag != "") from consuming a previous value
+					//   2. Newly activated by finding the first unassigned variadic positional
+					// This enables: radd test.rad -U (where -U activates the variadic)
+					variadicFlag := c.lastVariadicFlag
+					if variadicFlag == "" {
+						variadicFlag = c.findNextUnassignedVariadicPositional()
 					}
-					i++
-					continue
+
+					if variadicFlag != "" {
+						// We have a variadic that can consume this unknown flag
+						if err := c.assignPositional(arg); err != nil {
+							// If variadic assignment fails, fall back to normal unknown handling
+							if cfg.ignoreUnknown {
+								c.unknownArgs = append(c.unknownArgs, arg)
+							} else {
+								return err
+							}
+						} else {
+							// Successfully assigned - activate the variadic if it wasn't already
+							c.lastVariadicFlag = variadicFlag
+						}
+						i++
+						continue
+					}
 				}
 
 				if cfg.ignoreUnknown {
@@ -437,6 +452,44 @@ func (c *Cmd) hasNumberShorts() bool {
 		}
 	}
 	return false
+}
+
+// findNextUnassignedVariadicPositional returns the name of the first unassigned variadic positional flag
+// (in registration order), or an empty string if none exists
+func (c *Cmd) findNextUnassignedVariadicPositional() string {
+	for _, name := range c.positional {
+		flag := c.flags[name]
+
+		// Skip if already configured
+		if c.configured[name] {
+			continue
+		}
+
+		// Check if it's a variadic slice flag
+		switch f := flag.(type) {
+		case *StringSliceFlag:
+			if f.Variadic && !f.FlagOnly {
+				return name
+			}
+		case *IntSliceFlag:
+			if f.Variadic && !f.FlagOnly {
+				return name
+			}
+		case *Int64SliceFlag:
+			if f.Variadic && !f.FlagOnly {
+				return name
+			}
+		case *Float64SliceFlag:
+			if f.Variadic && !f.FlagOnly {
+				return name
+			}
+		case *BoolSliceFlag:
+			if f.Variadic && !f.FlagOnly {
+				return name
+			}
+		}
+	}
+	return ""
 }
 
 func (c *Cmd) parseFlag(args []string, index int, numberShortsMode bool, cfg *parseCfg) (int, error) {

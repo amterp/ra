@@ -408,8 +408,8 @@ Usage:
   git-like [subcommand] [config] [OPTIONS]
 
 Commands:
-  add                           Add files to the staging area
-  commit                        Record changes to the repository
+  add      Add files to the staging area
+  commit   Record changes to the repository
 
 Arguments:
       --config str   Path to config file. (default ~/.gitlike/config)

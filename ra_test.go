@@ -1435,6 +1435,60 @@ Global options:
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(stdout.String()))
 }
 
+func Test_MultiLineDescriptionShowsOnlyFirstLineInCommandList(t *testing.T) {
+	cleanup, _, stdout, _ := mockExit(t)
+	defer cleanup()
+
+	rootCmd := NewCmd("test")
+
+	processCmd := NewCmd("process")
+	processCmd.SetDescription("Process something.\nSecond line!")
+	rootCmd.RegisterCmd(processCmd)
+
+	assert.Panics(t, func() {
+		rootCmd.ParseOrExit([]string{"-h"})
+	})
+
+	expected := `
+Usage:
+  test [subcommand] [OPTIONS]
+
+Commands:
+  process   Process something.
+
+Global options:
+  -h, --help   Print usage string.
+`
+	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(stdout.String()))
+}
+
+func Test_MultiLineDescriptionShowsFullDescriptionForSpecificCommand(t *testing.T) {
+	cleanup, _, stdout, _ := mockExit(t)
+	defer cleanup()
+
+	rootCmd := NewCmd("test")
+
+	processCmd := NewCmd("process")
+	processCmd.SetDescription("Process something.\nSecond line!")
+	rootCmd.RegisterCmd(processCmd)
+
+	assert.Panics(t, func() {
+		rootCmd.ParseOrExit([]string{"process", "-h"})
+	})
+
+	expected := `
+Process something.
+Second line!
+
+Usage:
+  process [OPTIONS]
+
+Global options:
+  -h, --help   Print usage string.
+`
+	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(stdout.String()))
+}
+
 func Test_GlobalFlagAfterSubcmdRegistration(t *testing.T) {
 	rootCmd := NewCmd("root")
 	subCmd := NewCmd("sub")

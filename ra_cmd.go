@@ -143,6 +143,32 @@ func (c *Cmd) applyGlobalFlags(subCmd *Cmd) error {
 	return nil
 }
 
+// ResetParseState resets all parsing-related state to a clean slate, allowing the command
+// to be parsed again from scratch.
+//
+// ADVANCED: This is for multi-parse scenarios. Most applications should parse once.
+// All flag values are reset to defaults - cache any needed values before calling this.
+func (c *Cmd) ResetParseState() {
+	if c.used != nil {
+		*c.used = false
+	}
+	c.configured = make(map[string]bool)
+	c.unknownArgs = []string{}
+	c.lastVariadicFlag = ""
+	c.sawFlag = false
+
+	// Reset all flag values to their defaults
+	_ = c.setDefaults()
+
+	// Recursively reset all subcommands
+	for _, subCmd := range c.subCmds {
+		if subCmd.used != nil {
+			*subCmd.used = false
+		}
+		subCmd.ResetParseState()
+	}
+}
+
 // Whether a flag was explicitly configured by the user.
 func (c *Cmd) Configured(name string) bool {
 	// Check if flag is configured in this command

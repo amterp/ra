@@ -97,19 +97,45 @@ func (c *Cmd) generateCommandsSection(isLongHelp bool) string {
 	headers := c.getUsageHeaders()
 
 	sb.WriteString("\n" + GreenBoldS(headers.Commands) + "\n")
+
 	// Sort subcommand names for consistent output
 	var subCmdNames []string
 	for name := range c.subCmds {
 		subCmdNames = append(subCmdNames, name)
 	}
 	sort.Strings(subCmdNames)
+
+	// First pass: calculate maximum command name width
+	maxWidth := 0
+	for _, name := range subCmdNames {
+		cmdWidth := len(name) + 2 // 2 for leading "  "
+		if cmdWidth > maxWidth {
+			maxWidth = cmdWidth
+		}
+	}
+
+	// Add 3 spaces padding (same as flags formatting)
+	maxWidth = maxWidth + 3
+
+	// Second pass: generate aligned output
 	for _, name := range subCmdNames {
 		subCmd := c.subCmds[name]
+		cmdPart := fmt.Sprintf("  %s", name)
+		sb.WriteString(cmdPart)
+
 		if subCmd.description != "" {
-			sb.WriteString(fmt.Sprintf("  %-30s%s\n", name, subCmd.description))
-		} else {
-			sb.WriteString(fmt.Sprintf("  %s\n", name))
+			// Only show first line of description in command list for better readability
+			firstLine := strings.Split(subCmd.description, "\n")[0]
+
+			// Calculate padding to align descriptions
+			padding := maxWidth - len(cmdPart)
+			if padding < 1 {
+				padding = 1
+			}
+			sb.WriteString(strings.Repeat(" ", padding))
+			sb.WriteString(firstLine)
 		}
+		sb.WriteString("\n")
 	}
 
 	return sb.String()

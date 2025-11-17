@@ -26,6 +26,25 @@ type helpInvokedError struct {
 	isLongHelp     bool   // true for --help, false for -h or auto-help
 	isAutoHelp     bool   // true if triggered by auto-help (no args with required flags)
 	useCustomUsage bool   // true if custom usage function should be used
+	cmd            *Cmd   // The command that help was invoked for (for subcommand help)
+}
+
+// newHelpInvokedError creates a new helpInvokedError with mandatory cmd field.
+// This ensures that help errors always know which command they originated from,
+// allowing proper help generation for subcommands.
+func newHelpInvokedError(cmd *Cmd, exitCode int, useStdout bool, isLongHelp bool, isAutoHelp bool, useCustomUsage bool) *helpInvokedError {
+	if cmd == nil {
+		panic("helpInvokedError requires non-nil cmd - this is a programming error")
+	}
+	return &helpInvokedError{
+		output:         "",
+		exitCode:       exitCode,
+		useStdout:      useStdout,
+		isLongHelp:     isLongHelp,
+		isAutoHelp:     isAutoHelp,
+		useCustomUsage: useCustomUsage,
+		cmd:            cmd,
+	}
 }
 
 func (e *helpInvokedError) Error() string {
@@ -76,18 +95,24 @@ func (c *Cmd) ParseOrExit(args []string, opts ...ParseOpt) {
 	if err != nil {
 		// Check if this is a help invoked error
 		if helpErr, ok := err.(*helpInvokedError); ok {
+			// Determine which command to generate help for
+			targetCmd := c
+			if helpErr.cmd != nil {
+				targetCmd = helpErr.cmd
+			}
+
 			// Generate help output now, after PostParse hook has been called
 			var output string
 			if helpErr.useCustomUsage {
-				if c.customUsage != nil {
-					c.customUsage(helpErr.isLongHelp)
+				if targetCmd.customUsage != nil {
+					targetCmd.customUsage(helpErr.isLongHelp)
 					output = "" // Custom usage handles output directly
 				}
 			} else {
 				if helpErr.isLongHelp {
-					output = c.GenerateLongUsage()
+					output = targetCmd.GenerateLongUsage()
 				} else {
-					output = c.GenerateShortUsage()
+					output = targetCmd.GenerateShortUsage()
 				}
 			}
 
@@ -132,10 +157,16 @@ func (c *Cmd) ParseOrError(args []string, opts ...ParseOpt) error {
 	if err != nil {
 		// Check if this is a help invoked error
 		if helpErr, ok := err.(*helpInvokedError); ok {
+			// Determine which command to use for custom usage
+			targetCmd := c
+			if helpErr.cmd != nil {
+				targetCmd = helpErr.cmd
+			}
+
 			// Call custom usage function if it exists, even though ParseOrError doesn't display output
 			// This maintains backward compatibility for custom usage functions that may have side effects
-			if helpErr.useCustomUsage && c.customUsage != nil {
-				c.customUsage(helpErr.isLongHelp)
+			if helpErr.useCustomUsage && targetCmd.customUsage != nil {
+				targetCmd.customUsage(helpErr.isLongHelp)
 			}
 			return HelpInvokedErr
 		} else if _, ok := err.(*dumpInvokedError); ok {
@@ -197,14 +228,14 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 
 	// Check for auto-help: if enabled, no args provided, and command has required flags
 	if c.autoHelpOnNoArgs && len(args) == 0 && c.hasRequiredFlags() {
-		return &helpInvokedError{
-			output:         "", // Will be generated later, after PostParse hook
-			exitCode:       0,
-			useStdout:      true,
-			isLongHelp:     false, // Auto-help uses short help
-			isAutoHelp:     true,
-			useCustomUsage: c.customUsage != nil,
-		}
+		return newHelpInvokedError(
+			c,                    // cmd
+			0,                    // exitCode
+			true,                 // useStdout
+			false,                // isLongHelp (auto-help uses short help)
+			true,                 // isAutoHelp
+			c.customUsage != nil, // useCustomUsage
+		)
 	}
 
 	// Check if we have number shorts mode
@@ -329,24 +360,24 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 	if c.helpEnabled {
 		for _, arg := range args {
 			if arg == "--help" {
-				return &helpInvokedError{
-					output:         "", // Will be generated later, after PostParse hook
-					exitCode:       0,
-					useStdout:      true,
-					isLongHelp:     true,
-					isAutoHelp:     false,
-					useCustomUsage: c.customUsage != nil,
-				}
+				return newHelpInvokedError(
+					c,                    // cmd
+					0,                    // exitCode
+					true,                 // useStdout
+					true,                 // isLongHelp
+					false,                // isAutoHelp
+					c.customUsage != nil, // useCustomUsage
+				)
 			}
 			if arg == "-h" {
-				return &helpInvokedError{
-					output:         "", // Will be generated later, after PostParse hook
-					exitCode:       0,
-					useStdout:      true,
-					isLongHelp:     false,
-					isAutoHelp:     false,
-					useCustomUsage: c.customUsage != nil,
-				}
+				return newHelpInvokedError(
+					c,                    // cmd
+					0,                    // exitCode
+					true,                 // useStdout
+					false,                // isLongHelp
+					false,                // isAutoHelp
+					c.customUsage != nil, // useCustomUsage
+				)
 			}
 		}
 	}
@@ -2273,12 +2304,12 @@ func (c *Cmd) createHelpError(args []string) error {
 		}
 	}
 
-	return &helpInvokedError{
-		output:         "", // Will be generated later, after PostParse hook
-		exitCode:       0,
-		useStdout:      true,
-		isLongHelp:     isLongHelp,
-		isAutoHelp:     false,
-		useCustomUsage: c.customUsage != nil,
-	}
+	return newHelpInvokedError(
+		c,                    // cmd
+		0,                    // exitCode
+		true,                 // useStdout
+		isLongHelp,           // isLongHelp
+		false,                // isAutoHelp
+		c.customUsage != nil, // useCustomUsage
+	)
 }

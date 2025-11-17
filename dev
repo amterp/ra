@@ -10,22 +10,22 @@ args:
     release r bool    # Release a new version.
 
 if build:
-    $!`make build`
+    $`make build`
 
 if push or validate or release:
-    $!`go mod tidy`
-    $!`make all`
-    $!`golines -w . -m 120`
-    $!`go fmt`
-    $!`go vet`
-    $!`go test -count=100`
+    $`go mod tidy`
+    $`make all`
+    $`golines -w . -m 120`
+    $`go fmt`
+    $`go vet`
+    $`go test -count=100`
 
 if release:
     pushup()
-    $!`git tag -l | tail`
+    $`git tag -l | tail`
     version = get_version()
-    $!`gh release create {version} --generate-notes --title "Release {version}"`
-    $!`git fetch origin --tags`
+    $`gh release create {version} --generate-notes --title "Release {version}"`
+    $`git fetch origin --tags`
 
 if push or force_push:
     pushup()
@@ -34,10 +34,10 @@ print(green("✅ Done!"))
 
 fn pushup():
     branch = get_branch()
-    $!`git push origin {branch} --tags`
+    $`git push origin {branch} --tags`
 
 fn get_branch():
-    _, branch  = $!`echo -n $(git branch --show-current)`
+    _, branch  = $`echo -n $(git branch --show-current)`
     return branch.trim()
 
 fn get_version() -> str:

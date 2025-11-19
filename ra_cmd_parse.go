@@ -32,7 +32,14 @@ type helpInvokedError struct {
 // newHelpInvokedError creates a new helpInvokedError with mandatory cmd field.
 // This ensures that help errors always know which command they originated from,
 // allowing proper help generation for subcommands.
-func newHelpInvokedError(cmd *Cmd, exitCode int, useStdout bool, isLongHelp bool, isAutoHelp bool, useCustomUsage bool) *helpInvokedError {
+func newHelpInvokedError(
+	cmd *Cmd,
+	exitCode int,
+	useStdout bool,
+	isLongHelp bool,
+	isAutoHelp bool,
+	useCustomUsage bool,
+) *helpInvokedError {
 	if cmd == nil {
 		panic("helpInvokedError requires non-nil cmd - this is a programming error")
 	}

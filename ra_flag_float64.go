@@ -80,6 +80,11 @@ func (f *Float64Flag) SetCustomUsageType(customType string) *Float64Flag {
 	return f
 }
 
+func (f *Float64Flag) SetCompletionFunc(fn CompletionFunc) *Float64Flag {
+	f.CompletionFunc = fn
+	return f
+}
+
 func (f *Float64Flag) Register(cmd *Cmd, opts ...RegisterOption) (*float64, error) {
 	ptr := new(float64)
 	return ptr, f.RegisterWithPtr(cmd, ptr, opts...)

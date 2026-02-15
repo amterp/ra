@@ -394,7 +394,11 @@ func (c *Cmd) completeShortAndLongFlags(toComplete string, usedFlags map[string]
 // completeSubcommandsAndPositionals offers subcommand names and positional arg completions.
 // positionalCount is how many positional args have already been consumed.
 // includeSubcmds controls whether subcommand names are offered (false after --).
-func (c *Cmd) completeSubcommandsAndPositionals(toComplete string, positionalCount int, includeSubcmds bool) ([]string, CompletionDirective) {
+func (c *Cmd) completeSubcommandsAndPositionals(
+	toComplete string,
+	positionalCount int,
+	includeSubcmds bool,
+) ([]string, CompletionDirective) {
 	var candidates []string
 	directive := CompletionDirectiveNoFileComp
 

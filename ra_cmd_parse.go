@@ -100,6 +100,12 @@ func (c *Cmd) ParseOrExit(args []string, opts ...ParseOpt) {
 	}
 
 	if err != nil {
+		// Check if this is a completion invoked error (output already written)
+		if _, ok := err.(*completionInvokedError); ok {
+			osExit(0)
+			return
+		}
+
 		// Check if this is a help invoked error
 		if helpErr, ok := err.(*helpInvokedError); ok {
 			// Determine which command to generate help for
@@ -162,6 +168,11 @@ func (c *Cmd) ParseOrError(args []string, opts ...ParseOpt) error {
 	}
 
 	if err != nil {
+		// Check if this is a completion invoked error
+		if _, ok := err.(*completionInvokedError); ok {
+			return CompletionInvokedErr
+		}
+
 		// Check if this is a help invoked error
 		if helpErr, ok := err.(*helpInvokedError); ok {
 			// Determine which command to use for custom usage
@@ -223,6 +234,11 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 	// Set defaults first
 	if err := c.setDefaults(); err != nil {
 		return err
+	}
+
+	// Check for __complete - divert to completion logic if enabled
+	if c.completionEnabled && len(args) > 0 && args[0] == "__complete" {
+		return c.handleCompletion(args[1:])
 	}
 
 	// Check for dump mode - if enabled, generate dump output and return

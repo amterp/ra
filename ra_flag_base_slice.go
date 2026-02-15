@@ -100,6 +100,11 @@ func (f *SliceFlag[T]) SetCustomUsageType(customType string) *SliceFlag[T] {
 	return f
 }
 
+func (f *SliceFlag[T]) SetCompletionFunc(fn CompletionFunc) *SliceFlag[T] {
+	f.CompletionFunc = fn
+	return f
+}
+
 func (f *SliceFlag[T]) Register(cmd *Cmd, opts ...RegisterOption) (*[]T, error) {
 	ptr := new([]T)
 	return ptr, f.RegisterWithPtr(cmd, ptr, opts...)

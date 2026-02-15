@@ -81,6 +81,11 @@ func (f *IntFlag) SetCustomUsageType(customType string) *IntFlag {
 	return f
 }
 
+func (f *IntFlag) SetCompletionFunc(fn CompletionFunc) *IntFlag {
+	f.CompletionFunc = fn
+	return f
+}
+
 func (f *IntFlag) Register(cmd *Cmd, opts ...RegisterOption) (*int, error) {
 	ptr := new(int)
 	return ptr, f.RegisterWithPtr(cmd, ptr, opts...)

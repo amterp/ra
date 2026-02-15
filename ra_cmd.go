@@ -39,6 +39,9 @@ type Cmd struct {
 	subCmds               map[string]*Cmd
 	shortToName           map[string]string // short flag -> full name mapping
 
+	// completion
+	completionEnabled bool // if true, __complete subcommand is recognized
+
 	// options
 	customUsage          func(bool)    // if set, this function will be called to print usage instead of the default
 	parseHooks           *ParseHooks   // if set, hooks will be called after parsing

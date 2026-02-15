@@ -83,6 +83,11 @@ func (f *StringFlag) SetCustomUsageType(customType string) *StringFlag {
 	return f
 }
 
+func (f *StringFlag) SetCompletionFunc(fn CompletionFunc) *StringFlag {
+	f.CompletionFunc = fn
+	return f
+}
+
 func (f *StringFlag) Register(cmd *Cmd, opts ...RegisterOption) (*string, error) {
 	ptr := new(string)
 	return ptr, f.RegisterWithPtr(cmd, ptr, opts...)

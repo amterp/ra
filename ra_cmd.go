@@ -5,18 +5,20 @@ import (
 )
 
 type UsageHeaders struct {
-	Usage         string
-	Commands      string
-	Arguments     string
-	GlobalOptions string
+	Usage                 string
+	Commands              string
+	Arguments             string
+	GlobalOptions         string
+	SubcommandPlaceholder string
 }
 
 func DefaultUsageHeaders() UsageHeaders {
 	return UsageHeaders{
-		Usage:         "Usage:",
-		Commands:      "Commands:",
-		Arguments:     "Arguments:",
-		GlobalOptions: "Global options:",
+		Usage:                 "Usage:",
+		Commands:              "Commands:",
+		Arguments:             "Arguments:",
+		GlobalOptions:         "Global options:",
+		SubcommandPlaceholder: "subcommand",
 	}
 }
 
@@ -107,7 +109,11 @@ func (c *Cmd) SetUsageHeaders(headers UsageHeaders) *Cmd {
 
 func (c *Cmd) getUsageHeaders() UsageHeaders {
 	if c.usageHeaders != nil {
-		return *c.usageHeaders
+		h := *c.usageHeaders
+		if h.SubcommandPlaceholder == "" {
+			h.SubcommandPlaceholder = DefaultUsageHeaders().SubcommandPlaceholder
+		}
+		return h
 	}
 	return DefaultUsageHeaders()
 }

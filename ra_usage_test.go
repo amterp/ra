@@ -1951,3 +1951,35 @@ Arguments:
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
 }
+
+func Test_Usage_CustomSubcommandPlaceholder(t *testing.T) {
+	cmd := NewCmd("myapp")
+	cmd.SetDescription("Test custom subcommand placeholder")
+
+	cmd.SetUsageHeaders(UsageHeaders{
+		Usage:                 "Usage:",
+		Commands:              "Commands:",
+		Arguments:             "Arguments:",
+		GlobalOptions:         "Global options:",
+		SubcommandPlaceholder: "command",
+	})
+
+	subCmd := NewCmd("serve")
+	subCmd.SetDescription("Start the server")
+	_, err := cmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	usage := cmd.GenerateUsage(false)
+
+	expected := `Test custom subcommand placeholder
+
+Usage:
+  myapp [command] [OPTIONS]
+
+Commands:
+  serve   Start the server
+`
+
+	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
+	assert.NotContains(t, usage, "[subcommand]")
+}

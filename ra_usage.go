@@ -346,7 +346,8 @@ func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 	sb.WriteString(BoldS(c.name))
 
 	if len(c.subCmds) > 0 {
-		sb.WriteString(" " + CyanS("[subcommand]"))
+		headers := c.getUsageHeaders()
+		sb.WriteString(" " + CyanS("[%s]", headers.SubcommandPlaceholder))
 		// Still show parent command flags in synopsis even when subcommands exist
 		for _, name := range c.positional {
 			flag := c.flags[name]

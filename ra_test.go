@@ -3404,6 +3404,39 @@ func Test_GlobalFlagShortShadowing_SubcommandKeepsShort(t *testing.T) {
 	assert.Contains(t, subUsage, "Global verbose flag")
 }
 
+func Test_SubcommandShortFlag_NotClobberedByGlobal(t *testing.T) {
+	rootCmd := NewCmd("root")
+
+	// Register global flag with short "d"
+	globalDebug, err := NewBool("debug").
+		SetShort("d").
+		SetUsage("Global debug flag").
+		Register(rootCmd, WithGlobal(true))
+	assert.NoError(t, err)
+
+	// Create subcommand with its own flag claiming short "d"
+	subCmd := NewCmd("tier")
+	subDeploy, _ := NewBool("deployments").
+		SetShort("d").
+		SetUsage("Deploy flag").
+		Register(subCmd)
+	subInvoked, err := rootCmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	// -d in the subcommand should set deployments, not debug
+	err = rootCmd.ParseOrError([]string{"tier", "-d"})
+	assert.NoError(t, err)
+	assert.True(t, *subInvoked)
+	assert.True(t, *subDeploy, "subcommand's -d should set deployments")
+	assert.False(t, *globalDebug, "global debug should NOT be set by -d in subcommand")
+
+	// --debug should still work for the global flag
+	rootCmd.ResetParseState()
+	err = rootCmd.ParseOrError([]string{"tier", "--debug"})
+	assert.NoError(t, err)
+	assert.True(t, *globalDebug, "global debug should still be reachable by long name")
+}
+
 func Test_UsageGeneration_NameBasedShadowing(t *testing.T) {
 	rootCmd := NewCmd("root")
 

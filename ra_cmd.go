@@ -140,7 +140,10 @@ func (c *Cmd) applyGlobalFlags(subCmd *Cmd) error {
 			if _, exists := subCmd.flags[globalFlagName]; !exists {
 				subCmd.flags[globalFlagName] = flag
 				if base := getBaseFlag(flag); base != nil && base.Short != "" {
-					subCmd.shortToName[base.Short] = base.Name
+					// Only set the short mapping if a command-specific flag hasn't already claimed it
+					if _, shortTaken := subCmd.shortToName[base.Short]; !shortTaken {
+						subCmd.shortToName[base.Short] = base.Name
+					}
 				}
 				// Also add to subcommand's global flags list and non-positional list
 				subCmd.globalFlags = append(subCmd.globalFlags, globalFlagName)

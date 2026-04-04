@@ -3,11 +3,14 @@ package ra
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // parseCompletion is a test helper that captures completion output.
@@ -410,6 +413,57 @@ func TestCompletionGenZsh(t *testing.T) {
 	assert.Contains(t, script, "compdef")
 }
 
+func TestGenBashCompletionAs(t *testing.T) {
+	var buf bytes.Buffer
+	err := GenBashCompletionAs(&buf, "deploy", "rad /path/to/deploy")
+	assert.NoError(t, err)
+
+	script := buf.String()
+	assert.Contains(t, script, "complete -o default -F _deploy_completions deploy")
+	// Completion binary is the rad invocation, not the script name
+	assert.Contains(t, script, `rad /path/to/deploy __complete`)
+	// Function name uses script name
+	assert.Contains(t, script, "_deploy_completions()")
+}
+
+func TestGenZshCompletionAs(t *testing.T) {
+	var buf bytes.Buffer
+	err := GenZshCompletionAs(&buf, "deploy", "rad /path/to/deploy")
+	assert.NoError(t, err)
+
+	script := buf.String()
+	assert.NotContains(t, script, "#compdef")
+	assert.Contains(t, script, "compdef _deploy deploy")
+	assert.Contains(t, script, `rad /path/to/deploy __complete`)
+	assert.Contains(t, script, "_deploy()")
+}
+
+func TestGenBashCompletionAs_SanitizesFuncName(t *testing.T) {
+	var buf bytes.Buffer
+	err := GenBashCompletionAs(&buf, "my-script.rad", "rad /path/to/my-script.rad")
+	assert.NoError(t, err)
+
+	script := buf.String()
+	// Function name has hyphens/dots replaced with underscores
+	assert.Contains(t, script, "_my_script_rad_completions()")
+	// But command name in complete line preserves original
+	assert.Contains(t, script, "complete -o default -F _my_script_rad_completions my-script.rad")
+}
+
+func TestGenBashCompletionAs_MatchesGenBashCompletion(t *testing.T) {
+	cmd := NewCmd("myapp").EnableCompletion()
+
+	var buf1 bytes.Buffer
+	err := cmd.GenBashCompletion(&buf1)
+	assert.NoError(t, err)
+
+	var buf2 bytes.Buffer
+	err = GenBashCompletionAs(&buf2, "myapp", "myapp")
+	assert.NoError(t, err)
+
+	assert.Equal(t, buf1.String(), buf2.String())
+}
+
 func TestCompletionMultiplePositionals(t *testing.T) {
 	cmd := NewCmd("test").EnableCompletion()
 	NewString("action").
@@ -659,4 +713,303 @@ func TestCompletionShortFlagValueBeforeSubcommand(t *testing.T) {
 	assert.Contains(t, candidates, "--force")
 	assert.Contains(t, candidates, "--help")
 	assert.NotContains(t, candidates, "--config")
+}
+
+// --- Integration tests: verify generated scripts work when eval'd unquoted ---
+//
+// These catch the class of bugs where the generated script breaks when newlines
+// are stripped (which happens with `eval $(cmd completion shell)` without quotes).
+// The key properties tested:
+//   - No comments that swallow the rest of the one-liner
+//   - Semicolons separating all statements
+//   - Registration line (compdef/complete) terminated so it doesn't eat the
+//     next function definition when multiple scripts are concatenated
+
+func shellAvailable(shell string) bool {
+	_, err := exec.LookPath(shell)
+	return err == nil
+}
+
+func TestZshScriptWorksUnquoted(t *testing.T) {
+	if !shellAvailable("zsh") {
+		t.Skip("zsh not available")
+	}
+
+	var buf bytes.Buffer
+	err := GenZshCompletionAs(&buf, "myapp", "myapp")
+	require.NoError(t, err)
+
+	// eval without quotes - the way users commonly write it
+	script := fmt.Sprintf("eval $(%s); type _myapp", shellEcho(buf.String()))
+	out, err := exec.Command("zsh", "--no-rcs", "-c", script).CombinedOutput()
+	assert.NoError(t, err, "zsh eval failed: %s", string(out))
+	assert.Contains(t, string(out), "_myapp is a shell function")
+}
+
+func TestZshMultiScriptConcatenationUnquoted(t *testing.T) {
+	if !shellAvailable("zsh") {
+		t.Skip("zsh not available")
+	}
+
+	// Generate two scripts and concatenate (simulates `rad completion zsh script1 script2`)
+	var buf bytes.Buffer
+	err := GenZshCompletionFull(&buf, "alpha", "rad", "rad /path/to/alpha")
+	require.NoError(t, err)
+	err = GenZshCompletionFull(&buf, "bravo", "rad", "rad /path/to/bravo")
+	require.NoError(t, err)
+
+	// Verify both functions are defined AND that 'compdef' wasn't accidentally
+	// redefined as a function. In zsh, `word1 word2 word3() { body }` defines
+	// ALL preceding words as functions, so a missing semicolon after `compdef`
+	// can silently overwrite it with our completion function body.
+	//
+	// We define a sentinel compdef so eval's compdef calls succeed, then verify
+	// the sentinel wasn't overwritten by checking its output.
+	sentinel := `compdef() { echo SENTINEL; };`
+	check := `type _rad_alpha; type _rad_bravo; compdef`
+	script := fmt.Sprintf("%s eval $(%s); %s", sentinel, shellEcho(buf.String()), check)
+	out, err := exec.Command("zsh", "--no-rcs", "-c", script).CombinedOutput()
+	assert.NoError(t, err, "zsh eval failed: %s", string(out))
+	outStr := string(out)
+	assert.Contains(t, outStr, "_rad_alpha is a shell function")
+	assert.Contains(t, outStr, "_rad_bravo is a shell function")
+	assert.Contains(t, outStr, "SENTINEL", "compdef was overwritten by the eval")
+}
+
+func TestBashScriptWorksUnquoted(t *testing.T) {
+	if !shellAvailable("bash") {
+		t.Skip("bash not available")
+	}
+
+	var buf bytes.Buffer
+	err := GenBashCompletionAs(&buf, "myapp", "myapp")
+	require.NoError(t, err)
+
+	// eval without quotes
+	script := fmt.Sprintf("eval $(%s); type _myapp_completions", shellEcho(buf.String()))
+	out, err := exec.Command("bash", "--norc", "-c", script).CombinedOutput()
+	assert.NoError(t, err, "bash eval failed: %s", string(out))
+	assert.Contains(t, string(out), "_myapp_completions is a function")
+}
+
+func TestBashMultiScriptConcatenationUnquoted(t *testing.T) {
+	if !shellAvailable("bash") {
+		t.Skip("bash not available")
+	}
+
+	var buf bytes.Buffer
+	err := GenBashCompletionFull(&buf, "alpha", "rad", "rad /path/to/alpha")
+	require.NoError(t, err)
+	err = GenBashCompletionFull(&buf, "bravo", "rad", "rad /path/to/bravo")
+	require.NoError(t, err)
+
+	script := fmt.Sprintf(
+		"eval $(%s); type _rad_alpha_completions; type _rad_bravo_completions",
+		shellEcho(buf.String()),
+	)
+	out, err := exec.Command("bash", "--norc", "-c", script).CombinedOutput()
+	assert.NoError(t, err, "bash eval failed: %s", string(out))
+	assert.Contains(t, string(out), "_rad_alpha_completions is a function")
+	assert.Contains(t, string(out), "_rad_bravo_completions is a function")
+}
+
+// shellEcho returns a shell command that prints the given string exactly.
+// Uses printf with a single-quote-escaped argument to avoid any interpretation.
+func shellEcho(s string) string {
+	escaped := strings.ReplaceAll(s, "'", "'\\''")
+	return fmt.Sprintf("printf '%%s' '%s'", escaped)
+}
+
+// --- End-to-end completion tests ---
+//
+// These verify that the generated scripts actually produce correct completion
+// candidates, not just that they define functions. A mock binary handles
+// __complete requests, and we simulate what the shell does during tab completion.
+
+// writeMockCompleter creates a temp script that responds to __complete with
+// the given candidates and directive. Returns the path (caller must remove).
+func writeMockCompleter(t *testing.T, candidates []string, directive int) string {
+	t.Helper()
+	f, err := os.CreateTemp("", "ra-completion-test-*")
+	require.NoError(t, err)
+
+	var lines string
+	for _, c := range candidates {
+		lines += fmt.Sprintf("echo '%s'\n", c)
+	}
+	script := fmt.Sprintf(
+		"#!/bin/sh\nif [ \"$1\" = \"__complete\" ]; then\n    shift\n    %s\n    echo ':%d'\nfi\n",
+		lines,
+		directive,
+	)
+	_, err = f.WriteString(script)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	require.NoError(t, os.Chmod(f.Name(), 0755))
+	return f.Name()
+}
+
+func TestZshCompletionProducesCandidates(t *testing.T) {
+	if !shellAvailable("zsh") {
+		t.Skip("zsh not available")
+	}
+
+	mock := writeMockCompleter(t, []string{"start", "stop", "status"}, 4)
+	defer os.Remove(mock)
+
+	var buf bytes.Buffer
+	err := GenZshCompletionAs(&buf, "myapp", mock)
+	require.NoError(t, err)
+
+	// In zsh, compadd can only run inside a completion widget context.
+	// We override it to capture what the function would offer. We also set
+	// the 'words' array to simulate the shell completion state.
+	// The real compadd is called with `-a arrayname` which means "use the
+	// contents of the named array variable as candidates".
+	zshTest := fmt.Sprintf(`
+		captured=();
+		compadd() {
+			local use_array=0;
+			local -a args;
+			while [[ $# -gt 0 ]]; do
+				case "$1" in
+					-a) use_array=1; shift ;;
+					-S) shift; shift ;;
+					-*) shift ;;
+					*) args+=("$1"); shift ;;
+				esac;
+			done;
+			if (( use_array )); then
+				for name in "${args[@]}"; do
+					captured+=("${(P@)name}");
+				done;
+			else
+				captured+=("${args[@]}");
+			fi;
+		};
+		compdef() { :; };
+		eval "$(%s)";
+		words=(myapp st);
+		_myapp;
+		for c in "${captured[@]}"; do echo "CANDIDATE:$c"; done
+	`, shellEcho(buf.String()))
+
+	out, err := exec.Command("zsh", "--no-rcs", "-c", zshTest).CombinedOutput()
+	require.NoError(t, err, "zsh completion test failed: %s", string(out))
+	outStr := string(out)
+	assert.Contains(t, outStr, "CANDIDATE:start")
+	assert.Contains(t, outStr, "CANDIDATE:stop")
+	assert.Contains(t, outStr, "CANDIDATE:status")
+}
+
+func TestZshCompletionWorksUnquotedEndToEnd(t *testing.T) {
+	if !shellAvailable("zsh") {
+		t.Skip("zsh not available")
+	}
+
+	// Combines structural and functional testing: verify that the generated script
+	// produces correct candidates even when eval'd without quotes (the unquoted
+	// form that strips newlines).
+	mock := writeMockCompleter(t, []string{"deploy", "destroy", "describe"}, 4)
+	defer os.Remove(mock)
+
+	var buf bytes.Buffer
+	err := GenZshCompletionAs(&buf, "myapp", mock)
+	require.NoError(t, err)
+
+	zshTest := fmt.Sprintf(`
+		captured=();
+		compadd() {
+			local use_array=0;
+			local -a args;
+			while [[ $# -gt 0 ]]; do
+				case "$1" in
+					-a) use_array=1; shift ;;
+					-S) shift; shift ;;
+					-*) shift ;;
+					*) args+=("$1"); shift ;;
+				esac;
+			done;
+			if (( use_array )); then
+				for name in "${args[@]}"; do
+					captured+=("${(P@)name}");
+				done;
+			else
+				captured+=("${args[@]}");
+			fi;
+		};
+		compdef() { :; };
+		eval $(%s);
+		words=(myapp de);
+		_myapp;
+		for c in "${captured[@]}"; do echo "CANDIDATE:$c"; done
+	`, shellEcho(buf.String()))
+
+	out, err := exec.Command("zsh", "--no-rcs", "-c", zshTest).CombinedOutput()
+	require.NoError(t, err, "zsh unquoted e2e test failed: %s", string(out))
+	outStr := string(out)
+	assert.Contains(t, outStr, "CANDIDATE:deploy")
+	assert.Contains(t, outStr, "CANDIDATE:destroy")
+	assert.Contains(t, outStr, "CANDIDATE:describe")
+}
+
+func TestBashCompletionProducesCandidates(t *testing.T) {
+	if !shellAvailable("bash") {
+		t.Skip("bash not available")
+	}
+
+	mock := writeMockCompleter(t, []string{"start", "stop", "status"}, 4)
+	defer os.Remove(mock)
+
+	var buf bytes.Buffer
+	err := GenBashCompletionAs(&buf, "myapp", mock)
+	require.NoError(t, err)
+
+	// In bash, we simulate completion by setting COMP_WORDS/COMP_CWORD,
+	// calling the completion function, and inspecting COMPREPLY.
+	bashTest := fmt.Sprintf(`
+		eval "$(%s)";
+		COMP_WORDS=(myapp st);
+		COMP_CWORD=1;
+		_myapp_completions;
+		for c in "${COMPREPLY[@]}"; do echo "CANDIDATE:$c"; done
+	`, shellEcho(buf.String()))
+
+	out, err := exec.Command("bash", "--norc", "-c", bashTest).CombinedOutput()
+	require.NoError(t, err, "bash completion test failed: %s", string(out))
+	outStr := string(out)
+	// Bash filters candidates by prefix match against $cur, so only "start",
+	// "stop", and "status" (all starting with "st") should appear.
+	assert.Contains(t, outStr, "CANDIDATE:start")
+	assert.Contains(t, outStr, "CANDIDATE:stop")
+	assert.Contains(t, outStr, "CANDIDATE:status")
+}
+
+func TestBashCompletionFiltersPrefix(t *testing.T) {
+	if !shellAvailable("bash") {
+		t.Skip("bash not available")
+	}
+
+	mock := writeMockCompleter(t, []string{"start", "stop", "restart"}, 4)
+	defer os.Remove(mock)
+
+	var buf bytes.Buffer
+	err := GenBashCompletionAs(&buf, "myapp", mock)
+	require.NoError(t, err)
+
+	// With cur="st", only "start" and "stop" should match, not "restart".
+	bashTest := fmt.Sprintf(`
+		eval "$(%s)";
+		COMP_WORDS=(myapp st);
+		COMP_CWORD=1;
+		_myapp_completions;
+		for c in "${COMPREPLY[@]}"; do echo "CANDIDATE:$c"; done
+	`, shellEcho(buf.String()))
+
+	out, err := exec.Command("bash", "--norc", "-c", bashTest).CombinedOutput()
+	require.NoError(t, err, "bash prefix filter test failed: %s", string(out))
+	outStr := string(out)
+	assert.Contains(t, outStr, "CANDIDATE:start")
+	assert.Contains(t, outStr, "CANDIDATE:stop")
+	assert.NotContains(t, outStr, "CANDIDATE:restart")
 }

@@ -457,16 +457,67 @@ func (c *Cmd) completeSubcommandsAndPositionals(
 	return candidates, directive
 }
 
+// sanitizeForShellFunc replaces characters that are invalid in shell function names with underscores.
+func sanitizeForShellFunc(name string) string {
+	var sb strings.Builder
+	for _, ch := range name {
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' {
+			sb.WriteRune(ch)
+		} else {
+			sb.WriteByte('_')
+		}
+	}
+	return sb.String()
+}
+
+// GenBashCompletionAs writes a bash completion script where the command being completed
+// (cmdName) differs from the binary used to generate completions (completionCmd).
+// cmdName is what the user types (e.g., "deploy"); completionCmd is what the shell calls
+// for completions (e.g., "rad /path/to/deploy").
+func GenBashCompletionAs(w io.Writer, cmdName, completionCmd string) error {
+	return GenBashCompletionFull(w, cmdName, "", completionCmd)
+}
+
+// GenBashCompletionFull writes a bash completion script with explicit control over the
+// shell function name prefix. funcPrefix is prepended to the sanitized cmdName to form
+// the function name (e.g., prefix "rad" + cmdName "deploy" -> "_rad_deploy_completions").
+func GenBashCompletionFull(w io.Writer, cmdName, funcPrefix, completionCmd string) error {
+	funcName := sanitizeForShellFunc(cmdName)
+	if funcPrefix != "" {
+		funcName = sanitizeForShellFunc(funcPrefix) + "_" + funcName
+	}
+	// Template slots: func name, completion binary, func name, command name
+	_, err := fmt.Fprintf(w, bashCompletionTemplate, funcName, completionCmd, funcName, cmdName)
+	return err
+}
+
+// GenZshCompletionAs writes a zsh completion script where the command being completed
+// (cmdName) differs from the binary used to generate completions (completionCmd).
+func GenZshCompletionAs(w io.Writer, cmdName, completionCmd string) error {
+	return GenZshCompletionFull(w, cmdName, "", completionCmd)
+}
+
+// GenZshCompletionFull writes a zsh completion script with explicit control over the
+// shell function name prefix. funcPrefix is prepended to the sanitized cmdName to form
+// the function name (e.g., prefix "rad" + cmdName "deploy" -> "_rad_deploy").
+func GenZshCompletionFull(w io.Writer, cmdName, funcPrefix, completionCmd string) error {
+	funcName := sanitizeForShellFunc(cmdName)
+	if funcPrefix != "" {
+		funcName = sanitizeForShellFunc(funcPrefix) + "_" + funcName
+	}
+	// Template slots: func name, completion binary, func name, command name
+	_, err := fmt.Fprintf(w, zshCompletionTemplate, funcName, completionCmd, funcName, cmdName)
+	return err
+}
+
 // GenBashCompletion writes the bash completion script for this command to the given writer.
 func (c *Cmd) GenBashCompletion(w io.Writer) error {
-	_, err := fmt.Fprintf(w, bashCompletionTemplate, c.name, c.name, c.name, c.name, c.name)
-	return err
+	return GenBashCompletionAs(w, c.name, c.name)
 }
 
 // GenZshCompletion writes the zsh completion script for this command to the given writer.
 func (c *Cmd) GenZshCompletion(w io.Writer) error {
-	_, err := fmt.Fprintf(w, zshCompletionTemplate, c.name, c.name, c.name, c.name, c.name)
-	return err
+	return GenZshCompletionAs(w, c.name, c.name)
 }
 
 func isSliceFlag(flag any) bool {

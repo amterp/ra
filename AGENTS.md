@@ -1,0 +1,21 @@
+- **Practice Test Driven Development.** If asked to change behavior or implement a new feature, add tests *first*, verify they fail, and then implement the code to get them passing.
+- If you ever get stuck, feel free to add temporary logging to help you.
+- If you're ever unsure about something, stop and ask me. Don't guess if you're not certain.
+- This project is under active development, don't worry about backwards compatibility with previous versions of the library.
+- The following files are helpful in understanding the project. Please update them as we make changes or change behavior.
+  - SPEC.md
+  - EXAMPLES.md
+  - USAGE.md
+- Please do not leave task-specific messages to the user via comments in the code base when making changes.
+- When writing tests:
+  - Prefer full string comparisons. Avoid `Contains` asserts, as they are incomplete and less thorough, leaving room for error.
+  - Check if another test already covers the behavior you want to test. If yes, don't add another test.
+- If asked to write a commit, do it as if you are the user. Check their previous commit messages using `git log` and replicate their style. Unless a change is very trivial, messages SHOULD have some level of detail/motivation.
+- When making changes to the structure/features of commands/flags, make sure you keep `generateDump` up-to-date.
+
+- Useful commands:
+  - `go fmt`
+  - `go test`
+    - We want to keep the project deterministic. To ensure tests aren't flaky, you can do `go test -count=100`
+  - `go vet`
+  - `./dev --validate` - Custom script which does all the above, and more. Recommend running this.

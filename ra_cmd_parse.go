@@ -1481,18 +1481,17 @@ func (c *Cmd) parseSliceFlag(args []string, index int, f *StringSliceFlag, cfg *
 	for i := index + 1; i < len(args); i++ {
 		arg := args[i]
 		if strings.HasPrefix(arg, "-") {
-			// Check if this might be an unknown flag that should be collected
-			if cfg.variadicUnknownFlags {
-				// Try to parse as flag - if it fails, it's unknown and should be collected
-				_, err := c.parseFlag(args, i, false, cfg)
-				if err != nil {
-					// Unknown flag - collect it into variadic
-					if _, err := c.appendStringSliceValue(f, arg); err != nil {
-						return 0, err
-					}
-					consumed++
-					continue
+			// An unknown flag-looking token can be collected as a value; a known
+			// flag ends the collection. The check must be side-effect free:
+			// actually parsing the candidate here (as this once did) executed
+			// every later flag in the argv once per probe, duplicating slice
+			// flag values.
+			if cfg.variadicUnknownFlags && !c.wouldParseAsFlag(arg) {
+				if _, err := c.appendStringSliceValue(f, arg); err != nil {
+					return 0, err
 				}
+				consumed++
+				continue
 			}
 			// Known flag or not collecting unknown flags - stop variadic collection
 			break
@@ -1504,6 +1503,40 @@ func (c *Cmd) parseSliceFlag(args []string, index int, f *StringSliceFlag, cfg *
 	}
 
 	return consumed, nil
+}
+
+// wouldParseAsFlag reports whether parseFlag would resolve the "-"-prefixed
+// token against the registered flags, without performing the parse (and its
+// side effects). Mirrors parseFlag's resolution outside number-shorts mode.
+func (c *Cmd) wouldParseAsFlag(arg string) bool {
+	if strings.HasPrefix(arg, "--") {
+		name := arg[2:]
+		if idx := strings.Index(name, "="); idx != -1 {
+			name = name[:idx]
+		}
+		_, ok := c.flags[name]
+		return ok
+	}
+	shorts := arg[1:]
+	if idx := strings.Index(shorts, "="); idx != -1 {
+		shorts = shorts[:idx]
+	}
+	if shorts == "" {
+		// Bare "-": parseShortFlag treats it as an empty cluster and succeeds.
+		return true
+	}
+	if isDigit(shorts[0]) || shorts[0] == '.' {
+		// Negative number: parseFlag rejects these outside number-shorts mode.
+		return false
+	}
+	// A cluster resolves only if every short is registered; parseShortFlag
+	// errors on the first unknown one.
+	for _, r := range shorts {
+		if _, ok := c.shortToName[string(r)]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Cmd) appendStringSliceValue(f *StringSliceFlag, value string) (int, error) {

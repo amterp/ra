@@ -112,6 +112,56 @@ func Test_StringSliceVariadicAndSeparator(t *testing.T) {
 	assert.Equal(t, []string{"alice", "bob", "charlie"}, *strSliceFlag)
 }
 
+func Test_StringSliceVariadicRepeatedFlagOccurrences(t *testing.T) {
+	// Regression: with variadic unknown-flag collection enabled, the collector
+	// probed candidate tokens by actually parsing them, so each later --bar
+	// occurrence was parsed once per probe and its values duplicated
+	// (--bar a --bar b --bar c gave [a b c b c c]).
+	fs := NewCmd("test")
+
+	strSliceFlag, err := NewStringSlice("bar").SetVariadic(true).Register(fs)
+	assert.NoError(t, err)
+
+	parseErr := fs.ParseOrError(
+		[]string{"--bar", "a", "--bar", "b", "--bar", "c"},
+		WithVariadicUnknownFlags(true))
+	assert.Nil(t, parseErr)
+	assert.Equal(t, []string{"a", "b", "c"}, *strSliceFlag)
+}
+
+func Test_StringSliceVariadicFollowedByOtherSliceFlag(t *testing.T) {
+	// Regression: the same probe-with-side-effects also double-parsed any known
+	// flag that ended a variadic collection, duplicating its values if it was a
+	// slice flag.
+	fs := NewCmd("test")
+
+	files, _ := NewStringSlice("files").SetVariadic(true).Register(fs)
+	tags, _ := NewStringSlice("tags").Register(fs)
+
+	parseErr := fs.ParseOrError(
+		[]string{"--files", "a", "b", "--tags", "x", "--tags", "y"},
+		WithVariadicUnknownFlags(true))
+	assert.Nil(t, parseErr)
+	assert.Equal(t, []string{"a", "b"}, *files)
+	assert.Equal(t, []string{"x", "y"}, *tags)
+}
+
+func Test_StringSliceVariadicStillCollectsUnknownFlagTokens(t *testing.T) {
+	// The side-effect-free known-flag check must keep the existing collection
+	// semantics: unknown flag-looking tokens and negative numbers are values.
+	fs := NewCmd("test")
+
+	bar, _ := NewStringSlice("bar").SetVariadic(true).Register(fs)
+	known, _ := NewBool("known").SetShort("k").Register(fs)
+
+	parseErr := fs.ParseOrError(
+		[]string{"--bar", "a", "-p", "-2", "--nope=x", "-k"},
+		WithVariadicUnknownFlags(true))
+	assert.Nil(t, parseErr)
+	assert.Equal(t, []string{"a", "-p", "-2", "--nope=x"}, *bar)
+	assert.True(t, *known)
+}
+
 func Test_IntRangeConstraint(t *testing.T) {
 	fs := NewCmd("test")
 

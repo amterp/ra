@@ -1505,6 +1505,13 @@ func (c *Cmd) parseSliceFlag(args []string, index int, f *StringSliceFlag, cfg *
 	return consumed, nil
 }
 
+// isNegativeNumberToken reports whether a "-"-prefixed token reads as a
+// negative number (-5, -.5, -3.2) rather than a flag, using the same leading
+// digit/dot test as parseShortFlag's negative-number detection.
+func isNegativeNumberToken(arg string) bool {
+	return len(arg) > 1 && (isDigit(arg[1]) || arg[1] == '.')
+}
+
 // wouldParseAsFlag reports whether parseFlag would resolve the "-"-prefixed
 // token against the registered flags, without performing the parse (and its
 // side effects). Mirrors parseFlag's resolution outside number-shorts mode.
@@ -1584,10 +1591,13 @@ func (c *Cmd) parseIntSliceFlag(args []string, index int, f *IntSliceFlag) (int,
 		return c.appendIntSliceValue(f, args[index+1])
 	}
 
-	// Variadic - consume until next flag
+	// Variadic - consume until next flag. Negative numbers are values, not
+	// flags (parseFlag treats them as positionals outside number-shorts mode),
+	// so greedy collection must consume them too.
+	numberShortsMode := c.hasNumberShorts()
 	consumed := 1
 	for i := index + 1; i < len(args); i++ {
-		if strings.HasPrefix(args[i], "-") {
+		if strings.HasPrefix(args[i], "-") && (numberShortsMode || !isNegativeNumberToken(args[i])) {
 			break
 		}
 		if _, err := c.appendIntSliceValue(f, args[i]); err != nil {
@@ -1652,10 +1662,12 @@ func (c *Cmd) parseInt64SliceFlag(args []string, index int, f *Int64SliceFlag) (
 		return c.appendInt64SliceValue(f, args[index+1])
 	}
 
-	// Variadic - consume until next flag
+	// Variadic - consume until next flag; negative numbers are values (see
+	// parseIntSliceFlag).
+	numberShortsMode := c.hasNumberShorts()
 	consumed := 1
 	for i := index + 1; i < len(args); i++ {
-		if strings.HasPrefix(args[i], "-") {
+		if strings.HasPrefix(args[i], "-") && (numberShortsMode || !isNegativeNumberToken(args[i])) {
 			break
 		}
 		if _, err := c.appendInt64SliceValue(f, args[i]); err != nil {
@@ -1720,10 +1732,12 @@ func (c *Cmd) parseFloat64SliceFlag(args []string, index int, f *Float64SliceFla
 		return c.appendFloat64SliceValue(f, args[index+1])
 	}
 
-	// Variadic - consume until next flag
+	// Variadic - consume until next flag; negative numbers are values (see
+	// parseIntSliceFlag).
+	numberShortsMode := c.hasNumberShorts()
 	consumed := 1
 	for i := index + 1; i < len(args); i++ {
-		if strings.HasPrefix(args[i], "-") {
+		if strings.HasPrefix(args[i], "-") && (numberShortsMode || !isNegativeNumberToken(args[i])) {
 			break
 		}
 		if _, err := c.appendFloat64SliceValue(f, args[i]); err != nil {
@@ -1788,7 +1802,9 @@ func (c *Cmd) parseBoolSliceFlag(args []string, index int, f *BoolSliceFlag) (in
 		return c.appendBoolSliceValue(f, args[index+1])
 	}
 
-	// Variadic - consume until next flag
+	// Variadic - consume until next flag. Unlike the numeric slice parsers,
+	// any "-"-prefixed token ends the collection: no valid bool value starts
+	// with "-", so such a token can only be a flag or a positional.
 	consumed := 1
 	for i := index + 1; i < len(args); i++ {
 		if strings.HasPrefix(args[i], "-") {

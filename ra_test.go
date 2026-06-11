@@ -162,6 +162,55 @@ func Test_StringSliceVariadicStillCollectsUnknownFlagTokens(t *testing.T) {
 	assert.True(t, *known)
 }
 
+func Test_IntSliceVariadicNegativeValues(t *testing.T) {
+	// Regression: the numeric variadic collectors broke on any "-"-prefixed
+	// token, so negative numbers ended the collection and spilled into
+	// positionals ("Too many positional arguments").
+	fs := NewCmd("test")
+
+	nums, err := NewIntSlice("nums").SetVariadic(true).Register(fs)
+	assert.NoError(t, err)
+
+	parseErr := fs.ParseOrError([]string{"--nums", "-5", "-3", "1"})
+	assert.Nil(t, parseErr)
+	assert.Equal(t, []int{-5, -3, 1}, *nums)
+}
+
+func Test_Int64SliceVariadicNegativeValues(t *testing.T) {
+	fs := NewCmd("test")
+
+	nums, err := NewInt64Slice("nums").SetVariadic(true).Register(fs)
+	assert.NoError(t, err)
+
+	parseErr := fs.ParseOrError([]string{"--nums", "-5", "1"})
+	assert.Nil(t, parseErr)
+	assert.Equal(t, []int64{-5, 1}, *nums)
+}
+
+func Test_Float64SliceVariadicNegativeValues(t *testing.T) {
+	fs := NewCmd("test")
+
+	nums, err := NewFloat64Slice("nums").SetVariadic(true).Register(fs)
+	assert.NoError(t, err)
+
+	parseErr := fs.ParseOrError([]string{"--nums", "-5.5", "-.5", "1.5"})
+	assert.Nil(t, parseErr)
+	assert.Equal(t, []float64{-5.5, -0.5, 1.5}, *nums)
+}
+
+func Test_IntSliceVariadicStillStopsAtFlags(t *testing.T) {
+	// Collecting negative numbers must not swallow actual flags.
+	fs := NewCmd("test")
+
+	nums, _ := NewIntSlice("nums").SetVariadic(true).Register(fs)
+	verbose, _ := NewBool("verbose").SetShort("v").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"--nums", "-5", "1", "-v"})
+	assert.Nil(t, parseErr)
+	assert.Equal(t, []int{-5, 1}, *nums)
+	assert.True(t, *verbose)
+}
+
 func Test_IntRangeConstraint(t *testing.T) {
 	fs := NewCmd("test")
 

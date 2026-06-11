@@ -162,6 +162,24 @@ func Test_StringSliceVariadicStillCollectsUnknownFlagTokens(t *testing.T) {
 	assert.True(t, *known)
 }
 
+func Test_BypassValidationSkipsRelationalConstraints(t *testing.T) {
+	// Regression: the bypass check sat between the relational pass and the
+	// missing-required pass, so a configured bypass flag (--version style)
+	// still tripped requires/excludes errors.
+	fs := NewCmd("test")
+
+	_, err := NewString("username").SetRequires([]string{"password"}).SetOptional(true).Register(fs)
+	assert.NoError(t, err)
+	_, err = NewString("password").SetOptional(true).Register(fs)
+	assert.NoError(t, err)
+	bypass, err := NewBool("version").Register(fs, WithBypassValidation(true))
+	assert.NoError(t, err)
+
+	parseErr := fs.ParseOrError([]string{"--username", "alice", "--version"})
+	assert.Nil(t, parseErr)
+	assert.True(t, *bypass)
+}
+
 func Test_IntSliceVariadicNegativeValues(t *testing.T) {
 	// Regression: the numeric variadic collectors broke on any "-"-prefixed
 	// token, so negative numbers ended the collection and spilled into

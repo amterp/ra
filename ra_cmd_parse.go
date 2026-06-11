@@ -1974,6 +1974,13 @@ func (c *Cmd) validateConstraintReferences() error {
 }
 
 func (c *Cmd) validateRequired() error {
+	// A configured bypass-validation flag (e.g. --version style flags) skips
+	// validation entirely - including the relational constraint pass below,
+	// which previously still ran because this check sat between the passes.
+	if c.hasConfiguredBypassFlag() {
+		return nil
+	}
+
 	// First pass: Check relational constraints (requires/excludes)
 	// These are more specific and should take precedence over generic "required flag missing" errors
 	// Iterate in registration order to ensure deterministic error messages
@@ -2021,54 +2028,6 @@ func (c *Cmd) validateRequired() error {
 		// Check exclusion constraints using the new helper
 		if err := c.checkExclusion(name); err != nil {
 			return err
-		}
-	}
-
-	// Check if any configured flags bypass validation
-	for name := range c.configured {
-		if flag, exists := c.flags[name]; exists {
-			switch f := flag.(type) {
-			case *BoolFlag:
-				if f.BypassValidation {
-					return nil // Skip validation entirely
-				}
-			case *StringFlag:
-				if f.BypassValidation {
-					return nil // Skip validation entirely
-				}
-			case *Int64Flag:
-				if f.BypassValidation {
-					return nil // Skip validation entirely
-				}
-			case *IntFlag:
-				if f.BypassValidation {
-					return nil // Skip validation entirely
-				}
-			case *Float64Flag:
-				if f.BypassValidation {
-					return nil // Skip validation entirely
-				}
-			case *SliceFlag[string]:
-				if f.BypassValidation {
-					return nil // Skip validation entirely
-				}
-			case *SliceFlag[int]:
-				if f.BypassValidation {
-					return nil // Skip validation entirely
-				}
-			case *SliceFlag[int64]:
-				if f.BypassValidation {
-					return nil // Skip validation entirely
-				}
-			case *SliceFlag[float64]:
-				if f.BypassValidation {
-					return nil // Skip validation entirely
-				}
-			case *SliceFlag[bool]:
-				if f.BypassValidation {
-					return nil // Skip validation entirely
-				}
-			}
 		}
 	}
 
@@ -2229,6 +2188,60 @@ func (c *Cmd) checkExclusion(flagName string) error {
 	}
 
 	return nil
+}
+
+// hasConfiguredBypassFlag returns true if any user-configured flag is marked
+// BypassValidation, meaning this parse skips required/relational validation.
+func (c *Cmd) hasConfiguredBypassFlag() bool {
+	for name := range c.configured {
+		flag, exists := c.flags[name]
+		if !exists {
+			continue
+		}
+		switch f := flag.(type) {
+		case *BoolFlag:
+			if f.BypassValidation {
+				return true
+			}
+		case *StringFlag:
+			if f.BypassValidation {
+				return true
+			}
+		case *Int64Flag:
+			if f.BypassValidation {
+				return true
+			}
+		case *IntFlag:
+			if f.BypassValidation {
+				return true
+			}
+		case *Float64Flag:
+			if f.BypassValidation {
+				return true
+			}
+		case *SliceFlag[string]:
+			if f.BypassValidation {
+				return true
+			}
+		case *SliceFlag[int]:
+			if f.BypassValidation {
+				return true
+			}
+		case *SliceFlag[int64]:
+			if f.BypassValidation {
+				return true
+			}
+		case *SliceFlag[float64]:
+			if f.BypassValidation {
+				return true
+			}
+		case *SliceFlag[bool]:
+			if f.BypassValidation {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // flagExplicitlySetForExclusion returns true if the flag counts as "set" for

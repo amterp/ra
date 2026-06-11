@@ -537,6 +537,54 @@ func Test_ExcludesFlags_OneWay(t *testing.T) {
 	assert.Equal(t, "value2", *flag2)
 }
 
+func Test_ExcludesFlags_DefaultsDoNotConflict(t *testing.T) {
+	// Regression: a flag that merely had a default was treated as "set" for
+	// exclusion checks, so setting just --file errored with "'file' excludes
+	// 'url', but 'url' was set" when url carried a default.
+	fs := NewCmd("test")
+	file, _ := NewString("file").SetDefault("").SetExcludes([]string{"url"}).Register(fs)
+	_, _ = NewString("url").SetDefault("").Register(fs)
+
+	err := fs.ParseOrError([]string{"--file", "in.txt"})
+	assert.Nil(t, err)
+	assert.Equal(t, "in.txt", *file)
+
+	// Same the other way around: the defaulted excluder must not fire either.
+	fs2 := NewCmd("test2")
+	_, _ = NewString("file").SetDefault("").SetExcludes([]string{"url"}).Register(fs2)
+	url2, _ := NewString("url").SetDefault("").Register(fs2)
+	err = fs2.ParseOrError([]string{"--url", "http://example.com"})
+	assert.Nil(t, err)
+	assert.Equal(t, "http://example.com", *url2)
+
+	// Explicitly setting both must still conflict.
+	fs3 := NewCmd("test3")
+	_, _ = NewString("file").SetDefault("").SetExcludes([]string{"url"}).Register(fs3)
+	_, _ = NewString("url").SetDefault("").Register(fs3)
+	err = fs3.ParseOrError([]string{"--file", "in.txt", "--url", "http://example.com"})
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "excludes")
+}
+
+func Test_BoolFlagExcludes_DefaultTrueDoesNotConflict(t *testing.T) {
+	// A bool that is true only by default expresses no user intent, so it must
+	// not trip another flag's exclusion. Explicitly passing it still does.
+	fs := NewCmd("test")
+	file, _ := NewString("file").SetExcludes([]string{"verbose"}).SetOptional(true).Register(fs)
+	_, _ = NewBool("verbose").SetDefault(true).Register(fs)
+
+	err := fs.ParseOrError([]string{"--file", "in.txt"})
+	assert.Nil(t, err)
+	assert.Equal(t, "in.txt", *file)
+
+	fs2 := NewCmd("test2")
+	_, _ = NewString("file").SetExcludes([]string{"verbose"}).SetOptional(true).Register(fs2)
+	_, _ = NewBool("verbose").SetDefault(true).Register(fs2)
+	err = fs2.ParseOrError([]string{"--file", "in.txt", "--verbose"})
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "excludes")
+}
+
 func Test_ErrorMessages_Format(t *testing.T) {
 	fs := NewCmd("test")
 

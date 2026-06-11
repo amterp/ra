@@ -2119,7 +2119,7 @@ func (c *Cmd) isFlagRequired(name string) bool {
 
 // checkExclusion checks if a flag excludes or is excluded by another flag
 func (c *Cmd) checkExclusion(flagName string) error {
-	if !c.flagConfiguredForRelationalConstraints(flagName) {
+	if !c.flagExplicitlySetForExclusion(flagName) {
 		return nil
 	}
 
@@ -2151,7 +2151,7 @@ func (c *Cmd) checkExclusion(flagName string) error {
 
 		if excludes != nil {
 			for _, excluded := range *excludes {
-				if c.flagConfiguredForRelationalConstraints(excluded) {
+				if c.flagExplicitlySetForExclusion(excluded) {
 					return fmt.Errorf(
 						"Invalid args: '%s' excludes '%s', but '%s' was set",
 						flagName,
@@ -2165,7 +2165,7 @@ func (c *Cmd) checkExclusion(flagName string) error {
 
 	// Check if any other configured flag excludes this flag
 	for _, otherName := range c.getAllFlagsInRegistrationOrder() {
-		if otherName == flagName || !c.flagConfiguredForRelationalConstraints(otherName) {
+		if otherName == flagName || !c.flagExplicitlySetForExclusion(otherName) {
 			continue
 		}
 
@@ -2215,10 +2215,28 @@ func (c *Cmd) checkExclusion(flagName string) error {
 	return nil
 }
 
+// flagExplicitlySetForExclusion returns true if the flag counts as "set" for
+// exclusion constraints: explicitly set by the user (boolean flags: set AND
+// true). Unlike requires constraints, a default value does not participate -
+// a default expresses the author's fallback, not user intent, so it cannot
+// conflict with anything the user actually passed.
+func (c *Cmd) flagExplicitlySetForExclusion(name string) bool {
+	flag, exists := c.flags[name]
+	if !exists || !c.configured[name] {
+		return false
+	}
+	if f, ok := flag.(*BoolFlag); ok {
+		return f.Value != nil && *f.Value
+	}
+	return true
+}
+
 // flagConfiguredForRelationalConstraints returns true if the flag should be considered configured
-// for the purposes of relational constraints (requires/excludes).
+// for the purposes of requires constraints.
 // For boolean flags, this only returns true when the flag's value is true.
-// For other flag types, this returns true if the flag has a value (configured or default).
+// For other flag types, this returns true if the flag has a value (configured or default) -
+// deliberately, so a defaulted flag both triggers its own requires constraints and satisfies
+// others' (see Test_RequiresWithDefaults_Scenario).
 func (c *Cmd) flagConfiguredForRelationalConstraints(name string) bool {
 	if flag, exists := c.flags[name]; exists {
 		switch f := flag.(type) {

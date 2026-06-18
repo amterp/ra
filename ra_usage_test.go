@@ -764,6 +764,27 @@ Commands:
 	assert.Equal(t, strings.TrimSpace(expectedLong), strings.TrimSpace(cmd.GenerateUsage(true)))
 }
 
+// A parent command's own required flags must appear in its synopsis consistently,
+// whether or not the [subcommand] placeholder is present. Previously the synopsis
+// took a reduced "subcommand branch" that dropped non-positional flags, so a
+// required flag-only arg could appear in -h but vanish from --help (or vice versa)
+// depending on subcommand visibility.
+func Test_Usage_SubcommandSynopsisIncludesRequiredFlags(t *testing.T) {
+	cmd := NewCmd("myapp")
+
+	_, err := NewString("target").SetFlagOnly(true).SetUsage("Deploy target").Register(cmd)
+	assert.NoError(t, err)
+
+	cmd.RegisterCmd(NewCmd("sub").SetDescription("A subcommand").SetHiddenInShortHelp(true))
+
+	// Short help: subcommand is hidden at this level, so no placeholder - but the
+	// required flag must still appear.
+	assert.Equal(t, "myapp <target> [OPTIONS]", cmd.GenerateShortSynopsis())
+
+	// Long help: placeholder appears AND the required flag still appears.
+	assert.Equal(t, "myapp [subcommand] <target> [OPTIONS]", cmd.GenerateLongSynopsis())
+}
+
 func Test_Usage_GlobalFlagsInSubCommand(t *testing.T) {
 	cmd := NewCmd("parent")
 	cmd.SetDescription("Parent command with global flags")

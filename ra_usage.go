@@ -385,57 +385,14 @@ func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 	var sb strings.Builder
 	sb.WriteString(BoldS(c.name))
 
-	// When no subcommands are visible at this help level - none exist, or all are
-	// hidden - fall through to the normal flag synopsis rather than advertising a
-	// [subcommand] placeholder the user can't act on.
+	// Prepend the [subcommand] placeholder when subcommands are visible at this
+	// help level (none visible - because none exist or all are hidden - means no
+	// placeholder). Either way we fall through to render the command's own flags
+	// below, so a required flag appears consistently regardless of whether the
+	// placeholder is shown.
 	if c.hasVisibleSubCmds(isLongHelp) {
 		headers := c.getUsageHeaders()
 		sb.WriteString(" " + CyanS("[%s]", headers.SubcommandPlaceholder))
-		// Still show parent command flags in synopsis even when subcommands exist
-		for _, name := range c.positional {
-			flag := c.flags[name]
-			base := getBaseFlag(flag)
-			if !base.isVisible(isLongHelp) {
-				continue
-			}
-
-			// Show positional-only flags or non-bool flags in synopsis (bools never appear)
-			if base.PositionalOnly || !isBoolFlag(flag) {
-				var argName string
-
-				// Check if it's a variadic slice
-				isVariadic := false
-				switch f := flag.(type) {
-				case *StringSliceFlag:
-					isVariadic = f.Variadic
-				case *IntSliceFlag:
-					isVariadic = f.Variadic
-				case *Int64SliceFlag:
-					isVariadic = f.Variadic
-				case *Float64SliceFlag:
-					isVariadic = f.Variadic
-				case *BoolSliceFlag:
-					isVariadic = f.Variadic
-				}
-
-				if isVariadic {
-					argName = name + "..."
-				} else {
-					argName = name
-				}
-
-				// Determine if flag should show as required or optional in synopsis
-				shouldBeOptional := c.shouldFlagBeOptionalInSynopsis(flag)
-
-				if shouldBeOptional {
-					sb.WriteString(" " + CyanS("[%s]", argName))
-				} else {
-					sb.WriteString(" " + CyanS("<%s>", argName))
-				}
-			}
-		}
-		sb.WriteString(" " + CyanS("[OPTIONS]"))
-		return sb.String()
 	}
 
 	// First pass: collect positional-only flags

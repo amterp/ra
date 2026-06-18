@@ -1,0 +1,17 @@
+{
+  "_v": 3,
+  "alias": "allow-inherited",
+  "alias_explicit": false,
+  "column": "low",
+  "created_at_millis": 1780370576661,
+  "creator": "Alexander Terp",
+  "description": "Ra couples two concerns into the single notion of a global flag: inheritance (the flag cascades to every descendant subcommand, and its configured state propagates along the invocation path) and presentation (the flag is hidden in short help and listed under \"Global options\", alongside tool-internal flags like --help/--color).\n\nConsumers sometimes want the inheritance behaviour without the global presentation. Rad's nested script commands are the motivating case: a namespace command (e.g. `remote`) declares shared args (e.g. `--timeout`) that should be inherited by all of its sub-commands. Functionally Ra's globals are exactly right - the value flows whether the flag is passed before or after the sub-command. But these are ordinary command arguments from the user's perspective, so they should appear under the command's args section and be visible in short help (-h), not buried under \"Global options\" next to Ra/tool internals and hidden until --help.\n\nWhat's needed (high level): a way to express \"inherited by descendants, but presented as a normal argument\" - i.e. decouple the inheritance mechanism from the global-style rendering. Exact API/shape is open: could be a per-flag option, a distinct registration concept, or a presentation override on existing globals.\n\nContext: surfaced while implementing nested commands in Rad (RAD-393). Rad currently registers namespace shared args as Ra globals as a functional-but-imperfect workaround; this card tracks the cleaner Ra-side fix.",
+  "id": "a_1QxUtGFzH",
+  "position": "U",
+  "title": "Allow inherited flags to render as command args, not globals",
+  "type": "enhancement",
+  "updated_at_millis": 1780370576661,
+  "history": [
+    {"field":"column","value":"low","at":1780370576661}
+  ]
+}

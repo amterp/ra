@@ -1,0 +1,57 @@
+default_column = "uncommitted"
+id = "b_1QxU4mriV"
+kan_schema = "board/12"
+name = "main"
+
+[card_display]
+  type_indicator = "type"
+
+[[columns]]
+  color = "#6b7280"
+  limit = 0
+  name = "uncommitted"
+
+[[columns]]
+  color = "#3b82f6"
+  limit = 0
+  name = "low"
+
+[[columns]]
+  color = "#f59e0b"
+  limit = 0
+  name = "high"
+
+[[columns]]
+  color = "#10b981"
+  limit = 0
+  name = "next"
+
+[[columns]]
+  color = "#9333ea"
+  limit = 0
+  name = "in-progress"
+
+[[columns]]
+  color = "#ec4899"
+  limit = 0
+  name = "done"
+
+[custom_fields]
+  [custom_fields.type]
+    type = "enum"
+
+    [[custom_fields.type.options]]
+      color = "#dc2626"
+      value = "bug"
+
+    [[custom_fields.type.options]]
+      color = "#2563eb"
+      value = "enhancement"
+
+    [[custom_fields.type.options]]
+      color = "#16a34a"
+      value = "feature"
+
+    [[custom_fields.type.options]]
+      color = "#4b5563"
+      value = "chore"

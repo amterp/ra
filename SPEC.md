@@ -42,8 +42,8 @@ All flags support:
 - **Usage**: Help text description.
 - **Default**: Default value when not specified.
 - **Optional**: Whether the flag is required (default: false).
-- **Hidden**: Whether the flag appears in any help output (default: false).
-- **HiddenInLongHelp**: Whether the flag appears in the long help output (`--help`) (default: false).
+- **Hidden**: When true, the flag is omitted from all help output (default: false).
+- **HiddenInShortHelp**: When true, the flag is omitted from short help (`-h`) but still shown in long help (`--help`) (default: false).
 - **PositionalOnly**: Flag can only be passed positionally.
 - **FlagOnly**: Flag can only be passed as a named flag.
 
@@ -168,7 +168,8 @@ invoked, err := cmd.RegisterCmd(subCmd)
 - **SetDescription(string)**: Sets a description for the command, shown at the top of the help text.
 - **SetCustomUsage(func(isLongHelp bool))**: Overrides the entire usage generation logic.
 - **SetHelpEnabled(bool)**: Disables the automatic registration of `-h`/`--help` flags if set to `false`.
-- **SetExcludeNameFromUsage(bool)**: Excludes the command name from usage output.
+- **SetHidden(bool)**: When true, the command is omitted from the parent's help output entirely (both `-h` and `--help`) and from shell completion. The command remains fully invocable by name.
+- **SetHiddenInShortHelp(bool)**: When true, the command is omitted from short help (`-h`) but still listed in long help (`--help`). It remains available in shell completion.
 - **SetAutoHelpOnNoArgs(bool)**: When enabled, automatically shows help (equivalent to `-h`) if no arguments are provided and the command has required flags. This provides a user-friendly experience when users run a command without arguments to see what options are available.
 
 #### Auto-Help on No Arguments
@@ -310,7 +311,7 @@ When `helpEnabled` is `true` (the default), two help flags are automatically reg
 - `-h`: Triggers the "short help" output.
 - `--help`: Triggers the "long help" output.
 
-The only difference between short and long help is that flags marked `HiddenInLongHelp` are excluded from the long help output.
+The only difference between short and long help is that flags and commands marked `HiddenInShortHelp` are excluded from the short help output but included in the long help output.
 
 ### Flag Ordering in Usage
 

@@ -683,6 +683,87 @@ Arguments:
 	assert.Equal(t, strings.TrimSpace(expectedLong), strings.TrimSpace(longUsage))
 }
 
+func Test_Usage_HiddenCommands(t *testing.T) {
+	cmd := NewCmd("myapp")
+	cmd.SetDescription("Testing hidden command behavior")
+
+	cmd.RegisterCmd(NewCmd("build").SetDescription("Build the project"))
+	cmd.RegisterCmd(NewCmd("secret-cmd").SetDescription("Secret command").SetHidden(true))
+	cmd.RegisterCmd(NewCmd("debug-cmd").SetDescription("Debug command").SetHiddenInShortHelp(true))
+
+	// Short help excludes both the fully hidden and the hidden-in-short commands.
+	shortUsage := cmd.GenerateUsage(false)
+	expectedShort := `Testing hidden command behavior
+
+Usage:
+  myapp [subcommand] [OPTIONS]
+
+Commands:
+  build   Build the project
+`
+	assert.Equal(t, strings.TrimSpace(expectedShort), strings.TrimSpace(shortUsage))
+
+	// Long help includes the hidden-in-short command but still excludes the fully hidden one.
+	longUsage := cmd.GenerateUsage(true)
+	expectedLong := `Testing hidden command behavior
+
+Usage:
+  myapp [subcommand] [OPTIONS]
+
+Commands:
+  build       Build the project
+  debug-cmd   Debug command
+`
+	assert.Equal(t, strings.TrimSpace(expectedLong), strings.TrimSpace(longUsage))
+}
+
+func Test_Usage_AllHiddenCommands(t *testing.T) {
+	cmd := NewCmd("myapp")
+	cmd.SetDescription("All hidden commands")
+
+	cmd.RegisterCmd(NewCmd("alpha").SetDescription("Alpha command").SetHidden(true))
+	cmd.RegisterCmd(NewCmd("beta").SetDescription("Beta command").SetHidden(true))
+
+	// With every subcommand hidden, neither the Commands section nor the
+	// [subcommand] synopsis placeholder should appear.
+	expected := `All hidden commands
+
+Usage:
+  myapp [OPTIONS]
+`
+	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(cmd.GenerateUsage(false)))
+	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(cmd.GenerateUsage(true)))
+}
+
+func Test_Usage_AllHiddenInShortHelpCommands(t *testing.T) {
+	cmd := NewCmd("myapp")
+	cmd.SetDescription("Commands hidden in short help")
+
+	cmd.RegisterCmd(NewCmd("alpha").SetDescription("Alpha command").SetHiddenInShortHelp(true))
+	cmd.RegisterCmd(NewCmd("beta").SetDescription("Beta command").SetHiddenInShortHelp(true))
+
+	// Short help: every command is hidden at this level, so the Commands section
+	// and the [subcommand] placeholder both drop out.
+	expectedShort := `Commands hidden in short help
+
+Usage:
+  myapp [OPTIONS]
+`
+	assert.Equal(t, strings.TrimSpace(expectedShort), strings.TrimSpace(cmd.GenerateUsage(false)))
+
+	// Long help: both commands reappear, along with the placeholder.
+	expectedLong := `Commands hidden in short help
+
+Usage:
+  myapp [subcommand] [OPTIONS]
+
+Commands:
+  alpha   Alpha command
+  beta    Beta command
+`
+	assert.Equal(t, strings.TrimSpace(expectedLong), strings.TrimSpace(cmd.GenerateUsage(true)))
+}
+
 func Test_Usage_GlobalFlagsInSubCommand(t *testing.T) {
 	cmd := NewCmd("parent")
 	cmd.SetDescription("Parent command with global flags")

@@ -28,9 +28,9 @@ Usage:
 ## Help Modes
 
 **Short Help vs Long Help:**
-- Short help includes all sections but filters flags marked `HiddenInLongHelp`
-- Long help includes all sections including flags marked `HiddenInLongHelp`
-- Global options section appears in both short and long help (users should use `HiddenInLongHelp` if they want to hide global options from short help)
+- Short help includes all sections but filters flags and commands marked `HiddenInShortHelp`
+- Long help includes all sections including flags and commands marked `HiddenInShortHelp`
+- Global options section appears in both short and long help (users should use `HiddenInShortHelp` if they want to hide global options from short help)
 - Usage generation function: `GenerateUsage(isLongHelp bool)`
 
 ## Color Scheme
@@ -60,7 +60,6 @@ Usage:
 - Bool flags are never shown in usage line (not positional)
 - ALL positional arguments appear in usage line (both required and optional)
 - The bracket style indicates requirement: `<required>` vs `[optional]`
-- Flags with `excludeNameFromUsage` set will not appear in synopsis but still appear in Arguments section
 - Order: positional args in registration order, followed by [OPTIONS]
 
 **Options:**
@@ -219,7 +218,21 @@ Arguments:
 ### Hidden Flags
 
 - **Hidden**: Completely omitted from usage display. Specified via `SetHidden(true)`
-- **HiddenInLongHelp**: Only shown in short help, omitted from long help. Specified via `SetHiddenInLongHelp(true)`
+- **HiddenInShortHelp**: Omitted from short help (`-h`), shown in long help (`--help`). Specified via `SetHiddenInShortHelp(true)`
+
+### Hidden Commands
+
+Subcommands support the same visibility controls as flags. A hidden command is
+omitted from the `Commands:` section and the `[subcommand]` synopsis placeholder,
+but remains fully invocable by name. Visibility only controls how the command
+appears in its *parent's* help - the command's own help (e.g. `myapp secret-cmd
+--help`) is unaffected.
+
+- **Hidden**: Omitted from all help output and from shell completion. Specified via `SetHidden(true)`
+- **HiddenInShortHelp**: Omitted from short help (`-h`), shown in long help (`--help`); still offered in completion. Specified via `SetHiddenInShortHelp(true)`
+
+When every subcommand is hidden at a given help level, the `Commands:` section
+and the `[subcommand]` placeholder are dropped entirely.
 
 ### Help Flag Behavior
 

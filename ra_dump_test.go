@@ -70,7 +70,8 @@ Command Information:
   Description: Test application
   Help Enabled: true
   Auto Help on No Args: false
-  Exclude Name from Usage: false
+  Hidden: false
+  Hidden in Short Help: false
   Custom Usage Function: not set
   PostParse Hook: not set
   Subcommands: none
@@ -179,7 +180,8 @@ Command Information:
   Description: Parent command
   Help Enabled: true
   Auto Help on No Args: false
-  Exclude Name from Usage: false
+  Hidden: false
+  Hidden in Short Help: false
   Custom Usage Function: not set
   PostParse Hook: not set
   Subcommands (2): sub, sub2
@@ -219,7 +221,8 @@ Subcommand Details:
     Description: Subcommand
     Help Enabled: true
     Auto Help on No Args: false
-    Exclude Name from Usage: false
+    Hidden: false
+    Hidden in Short Help: false
     Custom Usage Function: not set
     PostParse Hook: not set
     Subcommands (1): grandchild
@@ -251,7 +254,8 @@ Subcommand Details:
       Description: Grandchild command
       Help Enabled: true
       Auto Help on No Args: false
-      Exclude Name from Usage: false
+      Hidden: false
+      Hidden in Short Help: false
       Custom Usage Function: not set
       PostParse Hook: not set
       Subcommands: none
@@ -278,7 +282,8 @@ Subcommand Details:
     Description: Second subcommand
     Help Enabled: true
     Auto Help on No Args: false
-    Exclude Name from Usage: false
+    Hidden: false
+    Hidden in Short Help: false
     Custom Usage Function: not set
     PostParse Hook: not set
     Subcommands: none
@@ -353,7 +358,8 @@ Command Information:
   Description: <not set>
   Help Enabled: true
   Auto Help on No Args: false
-  Exclude Name from Usage: false
+  Hidden: false
+  Hidden in Short Help: false
   Custom Usage Function: not set
   PostParse Hook: not set
   Subcommands: none

@@ -283,6 +283,20 @@ func Test_Cmds(t *testing.T) {
 	assert.Equal(t, "test.txt", *addFile)
 }
 
+// Hidden only affects help/completion visibility, never parsing - a hidden
+// command is still fully invocable by name.
+func Test_HiddenCommand_StillInvocable(t *testing.T) {
+	rootCmd := NewCmd("root")
+	subCmd := NewCmd("internal").SetHidden(true)
+
+	subInvoked, err := rootCmd.RegisterCmd(subCmd)
+	assert.NoError(t, err)
+
+	parseErr := rootCmd.ParseOrError([]string{"internal"})
+	assert.Nil(t, parseErr)
+	assert.True(t, *subInvoked)
+}
+
 // --arg1 already set, so "bbb" falls into arg2
 func Test_PositionalAssignmentLeftToRight(t *testing.T) {
 	fs := NewCmd("test")

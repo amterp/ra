@@ -88,8 +88,42 @@ func (c *Cmd) generateDescription() string {
 	return c.description + "\n\n"
 }
 
+// isVisible reports whether this flag should appear in help output at the given
+// help level. The command equivalent is (*Cmd).isVisible. Note completion uses
+// base.Hidden directly instead, since HiddenInShortHelp does not affect completion.
+func (b *BaseFlag) isVisible(isLongHelp bool) bool {
+	if b.Hidden {
+		return false
+	}
+	if !isLongHelp && b.HiddenInShortHelp {
+		return false
+	}
+	return true
+}
+
+// isVisible reports whether this command should appear in help output at the
+// given help level. Mirrors (*BaseFlag).isVisible.
+func (c *Cmd) isVisible(isLongHelp bool) bool {
+	if c.hidden {
+		return false
+	}
+	if !isLongHelp && c.hiddenInShortHelp {
+		return false
+	}
+	return true
+}
+
+func (c *Cmd) hasVisibleSubCmds(isLongHelp bool) bool {
+	for _, subCmd := range c.subCmds {
+		if subCmd.isVisible(isLongHelp) {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *Cmd) generateCommandsSection(isLongHelp bool) string {
-	if len(c.subCmds) == 0 {
+	if !c.hasVisibleSubCmds(isLongHelp) {
 		return ""
 	}
 
@@ -105,9 +139,12 @@ func (c *Cmd) generateCommandsSection(isLongHelp bool) string {
 	}
 	sort.Strings(subCmdNames)
 
-	// First pass: calculate maximum command name width
+	// First pass: calculate maximum command name width (visible commands only)
 	maxWidth := 0
 	for _, name := range subCmdNames {
+		if !c.subCmds[name].isVisible(isLongHelp) {
+			continue
+		}
 		cmdWidth := len(name) + 2 // 2 for leading "  "
 		if cmdWidth > maxWidth {
 			maxWidth = cmdWidth
@@ -120,6 +157,9 @@ func (c *Cmd) generateCommandsSection(isLongHelp bool) string {
 	// Second pass: generate aligned output
 	for _, name := range subCmdNames {
 		subCmd := c.subCmds[name]
+		if !subCmd.isVisible(isLongHelp) {
+			continue
+		}
 		cmdPart := fmt.Sprintf("  %s", name)
 		sb.WriteString(cmdPart)
 
@@ -345,17 +385,17 @@ func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 	var sb strings.Builder
 	sb.WriteString(BoldS(c.name))
 
-	if len(c.subCmds) > 0 {
+	// When no subcommands are visible at this help level - none exist, or all are
+	// hidden - fall through to the normal flag synopsis rather than advertising a
+	// [subcommand] placeholder the user can't act on.
+	if c.hasVisibleSubCmds(isLongHelp) {
 		headers := c.getUsageHeaders()
 		sb.WriteString(" " + CyanS("[%s]", headers.SubcommandPlaceholder))
 		// Still show parent command flags in synopsis even when subcommands exist
 		for _, name := range c.positional {
 			flag := c.flags[name]
 			base := getBaseFlag(flag)
-			if base.Hidden {
-				continue
-			}
-			if !isLongHelp && base.HiddenInShortHelp {
+			if !base.isVisible(isLongHelp) {
 				continue
 			}
 
@@ -405,10 +445,7 @@ func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 	for _, name := range c.positional {
 		flag := c.flags[name]
 		base := getBaseFlag(flag)
-		if base.Hidden {
-			continue
-		}
-		if !isLongHelp && base.HiddenInShortHelp {
+		if !base.isVisible(isLongHelp) {
 			continue
 		}
 
@@ -429,10 +466,7 @@ func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 	for _, name := range c.nonPositional {
 		flag := c.flags[name]
 		base := getBaseFlag(flag)
-		if base.Hidden {
-			continue
-		}
-		if !isLongHelp && base.HiddenInShortHelp {
+		if !base.isVisible(isLongHelp) {
 			continue
 		}
 
@@ -556,15 +590,9 @@ func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 
 func (c *Cmd) hasVisibleFlags(flags []any, isLongHelp bool) bool {
 	for _, flag := range flags {
-		base := getBaseFlag(flag)
-		if base.Hidden {
-			continue
+		if getBaseFlag(flag).isVisible(isLongHelp) {
+			return true
 		}
-		if !isLongHelp && base.HiddenInShortHelp {
-			continue
-		}
-		// Found at least one visible flag
-		return true
 	}
 	return false
 }
@@ -579,11 +607,7 @@ func (c *Cmd) formatFlags(flags []any, isLongHelp bool) string {
 
 	for _, flag := range allFlags {
 		base := getBaseFlag(flag)
-		if base.Hidden {
-			flagParts = append(flagParts, "")
-			continue
-		}
-		if !isLongHelp && base.HiddenInShortHelp {
+		if !base.isVisible(isLongHelp) {
 			flagParts = append(flagParts, "")
 			continue
 		}

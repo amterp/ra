@@ -402,9 +402,14 @@ func (c *Cmd) completeSubcommandsAndPositionals(
 	var candidates []string
 	directive := CompletionDirectiveNoFileComp
 
-	// Add matching subcommand names
+	// Add matching subcommand names. Fully hidden commands are excluded; commands
+	// that are only hidden-in-short-help still complete - both mirror how hidden
+	// flags behave in completion (HiddenInShortHelp never affects completion).
 	if includeSubcmds {
-		for name := range c.subCmds {
+		for name, subCmd := range c.subCmds {
+			if subCmd.hidden {
+				continue
+			}
 			if strings.HasPrefix(name, toComplete) {
 				candidates = append(candidates, name)
 			}

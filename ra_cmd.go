@@ -43,12 +43,13 @@ type Cmd struct {
 	completionEnabled bool // if true, __complete subcommand is recognized
 
 	// options
-	customUsage          func(bool)    // if set, this function will be called to print usage instead of the default
-	parseHooks           *ParseHooks   // if set, hooks will be called after parsing
-	helpEnabled          bool          // default true automatically adds a help flag
-	excludeNameFromUsage bool          // if true, this command will not be included in usage output
-	autoHelpOnNoArgs     bool          // if true, show help when no args provided and required args exist
-	usageHeaders         *UsageHeaders // custom headers for usage output
+	customUsage       func(bool)    // if set, this function will be called to print usage instead of the default
+	parseHooks        *ParseHooks   // if set, hooks will be called after parsing
+	helpEnabled       bool          // default true automatically adds a help flag
+	hidden            bool          // if true, omit this command from help output entirely
+	hiddenInShortHelp bool          // if true, hide from short help (-h), show in long help (--help)
+	autoHelpOnNoArgs  bool          // if true, show help when no args provided and required args exist
+	usageHeaders      *UsageHeaders // custom headers for usage output
 
 	// state post-parse
 	used             *bool           // after parsing, whether this command was invoked
@@ -95,8 +96,13 @@ func (c *Cmd) SetHelpEnabled(enable bool) *Cmd {
 	return c
 }
 
-func (c *Cmd) SetExcludeNameFromUsage(exclude bool) *Cmd {
-	c.excludeNameFromUsage = exclude
+func (c *Cmd) SetHidden(hidden bool) *Cmd {
+	c.hidden = hidden
+	return c
+}
+
+func (c *Cmd) SetHiddenInShortHelp(hidden bool) *Cmd {
+	c.hiddenInShortHelp = hidden
 	return c
 }
 

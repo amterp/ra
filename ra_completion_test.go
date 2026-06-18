@@ -239,6 +239,20 @@ func TestCompletionHiddenFlagsExcluded(t *testing.T) {
 	assert.NotContains(t, candidates, "--hidden-flag")
 }
 
+func TestCompletionHiddenCommandExcluded(t *testing.T) {
+	cmd := NewCmd("test").EnableCompletion()
+	cmd.RegisterCmd(NewCmd("visible"))
+	cmd.RegisterCmd(NewCmd("secret").SetHidden(true))
+	cmd.RegisterCmd(NewCmd("debug").SetHiddenInShortHelp(true))
+
+	output, _ := parseCompletion(cmd, []string{"__complete", ""})
+	candidates, _ := parseCompletionLines(output)
+
+	assert.Contains(t, candidates, "visible")
+	assert.NotContains(t, candidates, "secret")
+	assert.Contains(t, candidates, "debug") // hidden-in-short still completes
+}
+
 func TestCompletionAlreadyUsedFlagExcluded(t *testing.T) {
 	cmd := NewCmd("test").EnableCompletion()
 	NewString("output").SetOptional(true).SetFlagOnly(true).Register(cmd)

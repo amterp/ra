@@ -4898,3 +4898,156 @@ func Test_VariadicSliceWithDefaultValues_ShouldReplaceNotAppend(t *testing.T) {
 		// Current behavior would be: []int{0, 1, 5, 10}
 	})
 }
+
+func Test_TooManyPositionals_ReportsAllUnused(t *testing.T) {
+	// Regression: parsing used to abort on the first unconsumed positional, so
+	// "a b c" against one positional slot reported only [b].
+	fs := NewCmd("test")
+
+	first, err := NewString("first").Register(fs)
+	assert.NoError(t, err)
+
+	parseErr := fs.ParseOrError([]string{"a", "b", "c"})
+	assert.Error(t, parseErr)
+	assert.Equal(t, "Too many positional arguments. Unused: [b, c]", parseErr.Error())
+	assert.Equal(t, "a", *first)
+
+	var tooMany *TooManyPositionalArgsError
+	assert.True(t, errors.As(parseErr, &tooMany))
+	assert.Equal(t, []string{"b", "c"}, tooMany.Unused)
+}
+
+func Test_TooManyPositionals_FlagsAfterStrayStillParsed(t *testing.T) {
+	fs := NewCmd("test")
+
+	first, _ := NewString("first").Register(fs)
+	verbose, _ := NewBool("verbose").SetShort("v").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"a", "b", "-v", "c"})
+	assert.Error(t, parseErr)
+
+	var tooMany *TooManyPositionalArgsError
+	assert.True(t, errors.As(parseErr, &tooMany))
+	assert.Equal(t, []string{"b", "c"}, tooMany.Unused)
+	assert.Equal(t, "a", *first)
+	assert.True(t, *verbose)
+}
+
+func Test_TooManyPositionals_AfterDashDash(t *testing.T) {
+	fs := NewCmd("test")
+
+	first, _ := NewString("first").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"a", "--", "b", "c"})
+	assert.Error(t, parseErr)
+
+	var tooMany *TooManyPositionalArgsError
+	assert.True(t, errors.As(parseErr, &tooMany))
+	assert.Equal(t, []string{"b", "c"}, tooMany.Unused)
+	assert.Equal(t, "a", *first)
+}
+
+func Test_TooManyPositionals_NonVariadicSliceConsumesOne(t *testing.T) {
+	// A non-variadic slice positional consumes exactly one positional; the rest
+	// must all be reported, not just the first.
+	fs := NewCmd("test")
+
+	targets, _ := NewStringSlice("targets").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"a", "b", "c"})
+	assert.Error(t, parseErr)
+
+	var tooMany *TooManyPositionalArgsError
+	assert.True(t, errors.As(parseErr, &tooMany))
+	assert.Equal(t, []string{"b", "c"}, tooMany.Unused)
+	assert.Equal(t, []string{"a"}, *targets)
+}
+
+func Test_TooManyPositionals_TypeErrorsStillAbort(t *testing.T) {
+	// Genuine conversion failures are not "excess" - they must abort immediately.
+	fs := NewCmd("test")
+
+	_, err := NewInt("num").Register(fs)
+	assert.NoError(t, err)
+
+	parseErr := fs.ParseOrError([]string{"abc", "def"})
+	assert.Error(t, parseErr)
+
+	var tooMany *TooManyPositionalArgsError
+	assert.False(t, errors.As(parseErr, &tooMany))
+	assert.Contains(t, parseErr.Error(), "num")
+}
+
+func Test_TooManyPositionals_HelpStillWins(t *testing.T) {
+	// A help request anywhere in the args takes precedence over the excess error.
+	fs := NewCmd("test")
+
+	_, err := NewString("first").Register(fs)
+	assert.NoError(t, err)
+
+	parseErr := fs.ParseOrError([]string{"a", "b", "--help"})
+	assert.Equal(t, HelpInvokedErr, parseErr)
+}
+
+func Test_ErrorHint_PrintedBetweenErrorAndUsage(t *testing.T) {
+	cleanup, exitCode, _, stderr := mockExit(t)
+	defer cleanup()
+
+	assert.PanicsWithValue(t, "os.Exit called", func() {
+		fs := NewCmd("test")
+		NewString("first").Register(fs)
+		fs.SetParseHooks(&ParseHooks{
+			ErrorHint: func(cmd *Cmd, err error) string {
+				var tooMany *TooManyPositionalArgsError
+				if errors.As(err, &tooMany) {
+					return "Hint: did you mean a variadic?"
+				}
+				return ""
+			},
+		})
+		fs.ParseOrExit([]string{"a", "b"})
+	})
+
+	assert.Equal(t, 1, *exitCode)
+	out := stderr.String()
+	errIdx := strings.Index(out, "Too many positional arguments. Unused: [b]")
+	hintIdx := strings.Index(out, "Hint: did you mean a variadic?")
+	usageIdx := strings.Index(out, "Usage:")
+	assert.True(t, errIdx >= 0 && hintIdx > errIdx && usageIdx > hintIdx, "expected error, then hint, then usage; got:\n%s", out)
+}
+
+func Test_ErrorHint_EmptyHintPrintsNothingExtra(t *testing.T) {
+	cleanup, exitCode, _, stderr := mockExit(t)
+	defer cleanup()
+
+	assert.PanicsWithValue(t, "os.Exit called", func() {
+		fs := NewCmd("test")
+		NewString("first").Register(fs)
+		fs.SetParseHooks(&ParseHooks{
+			ErrorHint: func(cmd *Cmd, err error) string { return "" },
+		})
+		fs.ParseOrExit([]string{"a", "b"})
+	})
+
+	assert.Equal(t, 1, *exitCode)
+	assert.Contains(t, stderr.String(), "Too many positional arguments. Unused: [b]\n\nUsage:")
+}
+
+func Test_TooManyPositionals_BeforeSubcommandStillError(t *testing.T) {
+	// Regression: collect-and-continue must not let a subcommand's successful
+	// parse swallow excess positionals that appeared before the subcommand.
+	parent := NewCmd("parent")
+	first, _ := NewString("first").Register(parent)
+	sub := NewCmd("sub")
+	subArg, _ := NewString("subarg").Register(sub)
+	parent.RegisterCmd(sub)
+
+	parseErr := parent.ParseOrError([]string{"a", "b", "sub", "c"})
+	assert.Error(t, parseErr)
+
+	var tooMany *TooManyPositionalArgsError
+	assert.True(t, errors.As(parseErr, &tooMany))
+	assert.Equal(t, []string{"b"}, tooMany.Unused)
+	assert.Equal(t, "a", *first)
+	_ = subArg
+}

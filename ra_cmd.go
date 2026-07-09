@@ -24,6 +24,11 @@ func DefaultUsageHeaders() UsageHeaders {
 
 type ParseHooks struct {
 	PostParse func(cmd *Cmd, err error) // Called after parsing, before any output
+
+	// ErrorHint, if set, is called when ParseOrExit is about to print a user-input
+	// parse error. A non-empty return is printed on its own line between the error
+	// message and the usage string, letting callers attach context-aware guidance.
+	ErrorHint func(cmd *Cmd, err error) string
 }
 
 type Cmd struct {
@@ -52,11 +57,12 @@ type Cmd struct {
 	usageHeaders      *UsageHeaders // custom headers for usage output
 
 	// state post-parse
-	used             *bool           // after parsing, whether this command was invoked
-	configured       map[string]bool // specified flags from flags.
-	unknownArgs      []string        // unknown args when ignoreUnknown is true
-	lastVariadicFlag string          // last variadic flag that was used
-	sawFlag          bool            // true if we've seen a flag since the last variadic
+	used              *bool           // after parsing, whether this command was invoked
+	configured        map[string]bool // specified flags from flags.
+	unknownArgs       []string        // unknown args when ignoreUnknown is true
+	excessPositionals []string        // positionals no flag could consume; reported together after parsing
+	lastVariadicFlag  string          // last variadic flag that was used
+	sawFlag           bool            // true if we've seen a flag since the last variadic
 }
 
 func NewCmd(name string) *Cmd {

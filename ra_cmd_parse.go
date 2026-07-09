@@ -76,6 +76,17 @@ func (e *dumpInvokedError) Unwrap() error {
 	return DumpInvokedErr
 }
 
+// TooManyPositionalArgsError is returned when positional arguments are provided
+// beyond what the command's positional flags can consume. Unused contains every
+// unconsumed positional, in the order they appeared.
+type TooManyPositionalArgsError struct {
+	Unused []string
+}
+
+func (e *TooManyPositionalArgsError) Error() string {
+	return fmt.Sprintf("Too many positional arguments. Unused: [%s]", strings.Join(e.Unused, ", "))
+}
+
 // ProgrammingError wraps errors caused by incorrect library setup/configuration.
 // These are bugs in the code using Ra, not user input errors.
 type ProgrammingError struct {
@@ -152,6 +163,11 @@ func (c *Cmd) ParseOrExit(args []string, opts ...ParseOpt) {
 		} else {
 			// Regular error - show error message and usage
 			fmt.Fprintln(stderrWriter, err.Error())
+			if c.parseHooks != nil && c.parseHooks.ErrorHint != nil {
+				if hint := c.parseHooks.ErrorHint(c, err); hint != "" {
+					fmt.Fprintln(stderrWriter, hint)
+				}
+			}
 			fmt.Fprintln(stderrWriter)
 			fmt.Fprint(stderrWriter, c.GenerateLongUsage())
 			osExit(1)
@@ -212,6 +228,7 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 		c.configured = make(map[string]bool)
 	}
 	c.unknownArgs = []string{}
+	c.excessPositionals = []string{}
 	c.lastVariadicFlag = ""
 	c.sawFlag = false
 
@@ -283,7 +300,7 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 			if err := c.assignPositionalWithMode(arg, true); err != nil {
 				if cfg.ignoreUnknown {
 					c.unknownArgs = append(c.unknownArgs, arg)
-				} else {
+				} else if !c.collectIfExcessPositional(arg, err) {
 					return err
 				}
 			}
@@ -294,6 +311,12 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 		// Check for subcommand first (only if not in positional-only mode)
 		if !strings.HasPrefix(arg, "-") {
 			if subCmd, exists := c.subCmds[arg]; exists {
+				// Delegating returns the child's result directly, so excess
+				// positionals collected so far would be silently dropped -
+				// report them now instead (pre-collect fail-fast behavior).
+				if len(c.excessPositionals) > 0 {
+					return &TooManyPositionalArgsError{Unused: c.excessPositionals}
+				}
 				*subCmd.used = true
 				// Apply global flags to subcommand before parsing
 				if err := c.applyGlobalFlags(subCmd); err != nil {
@@ -318,7 +341,7 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 					if err := c.assignPositional(arg); err != nil {
 						if cfg.ignoreUnknown {
 							c.unknownArgs = append(c.unknownArgs, arg)
-						} else {
+						} else if !c.collectIfExcessPositional(arg, err) {
 							return err
 						}
 					}
@@ -344,7 +367,7 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 							// If variadic assignment fails, fall back to normal unknown handling
 							if cfg.ignoreUnknown {
 								c.unknownArgs = append(c.unknownArgs, arg)
-							} else {
+							} else if !c.collectIfExcessPositional(arg, err) {
 								return err
 							}
 						} else {
@@ -371,7 +394,7 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 			if err := c.assignPositional(arg); err != nil {
 				if cfg.ignoreUnknown {
 					c.unknownArgs = append(c.unknownArgs, arg)
-				} else {
+				} else if !c.collectIfExcessPositional(arg, err) {
 					return err
 				}
 			}
@@ -405,8 +428,27 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 		}
 	}
 
+	// Report all unconsumed positionals together, now that flags after them have
+	// still been parsed and help (above) has had a chance to win.
+	if len(c.excessPositionals) > 0 {
+		return &TooManyPositionalArgsError{Unused: c.excessPositionals}
+	}
+
 	// Validate required flags
 	return c.validateRequired()
+}
+
+// collectIfExcessPositional records value for end-of-parse reporting if err is a
+// TooManyPositionalArgsError, letting parsing continue past stray positionals so
+// the full set can be reported at once. Returns false for any other error, which
+// should abort parsing as before (e.g. type-conversion failures).
+func (c *Cmd) collectIfExcessPositional(value string, err error) bool {
+	var tooMany *TooManyPositionalArgsError
+	if errors.As(err, &tooMany) {
+		c.excessPositionals = append(c.excessPositionals, value)
+		return true
+	}
+	return false
 }
 
 func (c *Cmd) setDefaults() error {
@@ -1272,15 +1314,7 @@ func (c *Cmd) assignPositionalWithMode(value string, positionalOnlyMode bool) er
 		}
 	}
 
-	// Check if we have boolean flags that might have been intended to take this value
-	boolFlagNames := []string{}
-	for name, flag := range c.flags {
-		if _, isBool := flag.(*BoolFlag); isBool {
-			boolFlagNames = append(boolFlagNames, name)
-		}
-	}
-
-	return fmt.Errorf("Too many positional arguments. Unused: [%s]", value)
+	return &TooManyPositionalArgsError{Unused: []string{value}}
 }
 
 // handleVariadicSliceFlag handles the common logic for variadic slice flags

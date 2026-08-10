@@ -4997,7 +4997,12 @@ func Test_ErrorHint_PrintedBetweenErrorAndUsage(t *testing.T) {
 	errIdx := strings.Index(out, "Too many positional arguments. Unused: [b]")
 	hintIdx := strings.Index(out, "Hint: did you mean a variadic?")
 	usageIdx := strings.Index(out, "Usage:")
-	assert.True(t, errIdx >= 0 && hintIdx > errIdx && usageIdx > hintIdx, "expected error, then hint, then usage; got:\n%s", out)
+	assert.True(
+		t,
+		errIdx >= 0 && hintIdx > errIdx && usageIdx > hintIdx,
+		"expected error, then hint, then usage; got:\n%s",
+		out,
+	)
 }
 
 func Test_ErrorHint_EmptyHintPrintsNothingExtra(t *testing.T) {

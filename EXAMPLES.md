@@ -230,6 +230,47 @@ negative integer values.
 
 ---
 
+## List positionals
+
+A list arg collects bare positional values greedily, the same as a variadic. The
+two differ on the flag side: a variadic takes a run of values after its own
+token, a list takes exactly one and is repeated instead.
+
+With `arg1: str`, variadic and `arg2: str[]`, short `c`, default `[]`:
+
+```sh
+mycmd t1 t2 t3 -c c1 c2
+```
+
+| Declared Arg          | Value            |
+|-----------------------|------------------|
+| `arg1: str`, variadic | `[ t1, t2, t3 ]` |
+| `arg2: str[]`         | `[ c1 ]`         |
+
+`c2` is an error: `-c` took its one value, and neither collector resumes after a
+flag. To pass several values to `arg2`, repeat the flag (`-c c1 -c c2`) or pass
+them positionally.
+
+```sh
+mycmd x y -c c1
+```
+
+| Declared Arg  | Value           |
+|---------------|-----------------|
+| `arg2: str[]` | `[ x, y, c1 ]`  |
+
+The bare values open the collection, and the later flag appends to the same
+list. Reversed, it doesn't work:
+
+```sh
+mycmd -c c1 x y
+```
+
+`arg2` is `[ c1 ]`, and `x` and `y` are errors. Non-resumption is what lets
+several collectors divide one command line into runs; see Multiple Variadics.
+
+---
+
 ## Positional variadic
 
 The last positional arg can be a variadic.

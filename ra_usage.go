@@ -381,6 +381,24 @@ func (c *Cmd) generateUsage(isLongHelp bool) string {
 	return sb.String()
 }
 
+// writeSynopsisArg renders one arg placeholder and reports whether it ends the
+// positional sequence. Both list forms take several values, so both get "...";
+// only a positional-capable one absorbs positionals and truncates what follows.
+func (c *Cmd) writeSynopsisArg(sb *strings.Builder, name string, flag any) bool {
+	collects := absorbsPositionals(flag)
+	argName := name
+	if collects || isVariadicFlag(flag) {
+		argName = name + "..."
+	}
+	// A variadic is never required, whatever else its declaration says.
+	if c.shouldFlagBeOptionalInSynopsis(flag) || isVariadicFlag(flag) {
+		sb.WriteString(" " + CyanS("[%s]", argName))
+	} else {
+		sb.WriteString(" " + CyanS("<%s>", argName))
+	}
+	return collects
+}
+
 func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 	var sb strings.Builder
 	sb.WriteString(BoldS(c.name))
@@ -456,88 +474,19 @@ func (c *Cmd) generateSynopsis(isLongHelp bool) string {
 		}
 	}
 
-	// Process positional-only flags first, but stop after first variadic
+	// A collector absorbs every remaining positional, so it ends the sequence:
+	// anything declared after it can only be set by name.
 	for _, name := range positionalOnlyFlags {
-		flag := c.flags[name]
-		shouldBeOptional := c.shouldFlagBeOptionalInSynopsis(flag)
-
-		// Check if it's a variadic positional flag
-		argName := name
-		isVariadic := false
-		switch f := flag.(type) {
-		case *StringSliceFlag:
-			if f.Variadic {
-				argName = name + "..."
-				isVariadic = true
-			}
-		case *IntSliceFlag:
-			if f.Variadic {
-				argName = name + "..."
-				isVariadic = true
-			}
-		case *Int64SliceFlag:
-			if f.Variadic {
-				argName = name + "..."
-				isVariadic = true
-			}
-		case *Float64SliceFlag:
-			if f.Variadic {
-				argName = name + "..."
-				isVariadic = true
-			}
-		case *BoolSliceFlag:
-			if f.Variadic {
-				argName = name + "..."
-				isVariadic = true
-			}
-		}
-
-		if shouldBeOptional {
-			sb.WriteString(" " + CyanS("[%s]", argName))
-		} else {
-			sb.WriteString(" " + CyanS("<%s>", argName))
-		}
-
-		// Stop after first variadic positional flag
-		if isVariadic {
+		if c.writeSynopsisArg(&sb, name, c.flags[name]) {
 			sb.WriteString(" " + CyanS("[OPTIONS]"))
 			return sb.String()
 		}
 	}
 
-	// Then process non-positional flags, but stop after first variadic
 	for _, name := range nonPositionalFlags {
-		flag := c.flags[name]
-
-		// Check if it's variadic
-		isVariadic := false
-		switch f := flag.(type) {
-		case *StringSliceFlag:
-			isVariadic = f.Variadic
-		case *IntSliceFlag:
-			isVariadic = f.Variadic
-		case *Int64SliceFlag:
-			isVariadic = f.Variadic
-		case *Float64SliceFlag:
-			isVariadic = f.Variadic
-		case *BoolSliceFlag:
-			isVariadic = f.Variadic
-		}
-
-		if isVariadic {
-			// All variadic flags show as [name...]
-			sb.WriteString(" " + CyanS("[%s...]", name))
-			// Stop after first variadic flag
+		if c.writeSynopsisArg(&sb, name, c.flags[name]) {
 			sb.WriteString(" " + CyanS("[OPTIONS]"))
 			return sb.String()
-		} else {
-			// Non-variadic required flags show as <name>
-			shouldBeOptional := c.shouldFlagBeOptionalInSynopsis(flag)
-			if shouldBeOptional {
-				sb.WriteString(" " + CyanS("[%s]", name))
-			} else {
-				sb.WriteString(" " + CyanS("<%s>", name))
-			}
 		}
 	}
 

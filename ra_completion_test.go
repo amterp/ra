@@ -1027,3 +1027,27 @@ func TestBashCompletionFiltersPrefix(t *testing.T) {
 	assert.Contains(t, outStr, "CANDIDATE:stop")
 	assert.NotContains(t, outStr, "CANDIDATE:restart")
 }
+
+func TestCompletionListPositionalStaysActive(t *testing.T) {
+	// A list positional absorbs every remaining position, so it keeps completing
+	// after values are typed rather than handing off to the next positional.
+	cmd := NewCmd("test").EnableCompletion()
+	NewStringSlice("targets").
+		SetCompletionFunc(func(toComplete string) ([]string, CompletionDirective) {
+			return []string{"alpha", "beta"}, CompletionDirectiveNoFileComp
+		}).
+		Register(cmd)
+	NewString("other").
+		SetOptional(true).
+		SetCompletionFunc(func(toComplete string) ([]string, CompletionDirective) {
+			return []string{"nope"}, CompletionDirectiveNoFileComp
+		}).
+		Register(cmd)
+
+	output, _ := parseCompletion(cmd, []string{"__complete", "alpha", ""})
+	candidates, _ := parseCompletionLines(output)
+
+	assert.Contains(t, candidates, "alpha")
+	assert.Contains(t, candidates, "beta")
+	assert.NotContains(t, candidates, "nope")
+}

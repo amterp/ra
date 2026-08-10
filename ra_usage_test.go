@@ -547,7 +547,7 @@ func Test_Usage_ComplexConstraints(t *testing.T) {
 	expected := `Command with various constraint types
 
 Usage:
-  complex [port] <rate> <retries> [format] <name> <tags> [OPTIONS]
+  complex [port] <rate> <retries> [format] <name> <tags...> [OPTIONS]
 
 Arguments:
   -p, --port int      Server port. Range: [1024, 65535] (default 8080)
@@ -1042,11 +1042,11 @@ func Test_Usage_PositionalOnlyAfterVariadicError(t *testing.T) {
 		SetUsage("Output file").
 		SetPositionalOnly(true).
 		Register(cmd)
-	assert.Error(t, err)
-	assert.Contains(
+	assert.Equal(
 		t,
+		`cannot register positional-only flag "output" after list positional flag "files" `+
+			`(a list positional absorbs all remaining positional args)`,
 		err.Error(),
-		"cannot register positional-only flag \"output\" after variadic positional flag \"files\"",
 	)
 }
 
@@ -1413,7 +1413,7 @@ func Test_DefaultValues_DisplayWithoutUsageText(t *testing.T) {
 	expected := `Test default values display without usage text
 
 Usage:
-  myapp [stringArg] [intArg] [floatArg] [stringListArg] [intListArg] [floatListArg] [boolListArg] [OPTIONS]
+  myapp [stringArg] [intArg] [floatArg] [stringListArg...] [OPTIONS]
 
 Arguments:
       --stringArg str         (default alice)
@@ -2084,4 +2084,26 @@ Commands:
 
 	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(usage))
 	assert.NotContains(t, usage, "[subcommand]")
+}
+
+func Test_Usage_SynopsisTruncatesAfterCollectingPositional(t *testing.T) {
+	// A list positional absorbs every remaining bare value, so the synopsis stops
+	// there: "after" is real, but it can only be set by name.
+	cmd := NewCmd("test")
+	NewString("first").Register(cmd)
+	NewStringSlice("tags").Register(cmd)
+	NewString("after").Register(cmd)
+
+	assert.Equal(t, "test <first> <tags...> [OPTIONS]", cmd.GenerateSynopsis(false))
+}
+
+func Test_Usage_FlagOnlyListDoesNotTruncateSynopsis(t *testing.T) {
+	// A flag-only list takes no positionals, so it absorbs nothing and whatever
+	// follows stays reachable. The variadic still shows "..." - it is greedy
+	// after its own flag token.
+	cmd := NewCmd("test")
+	NewStringSlice("options").SetVariadic(true).SetFlagOnly(true).Register(cmd)
+	NewString("target").SetFlagOnly(true).Register(cmd)
+
+	assert.Equal(t, "test [options...] <target> [OPTIONS]", cmd.GenerateSynopsis(false))
 }

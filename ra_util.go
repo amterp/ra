@@ -30,6 +30,42 @@ func getBaseFlag(flag any) *BaseFlag {
 	return nil
 }
 
+func isSliceFlag(flag any) bool {
+	switch flag.(type) {
+	case *StringSliceFlag, *IntSliceFlag, *Int64SliceFlag, *Float64SliceFlag, *BoolSliceFlag:
+		return true
+	}
+	return false
+}
+
+// isVariadicFlag reports flag-side greed: a variadic flag collects a run of
+// values after its own flag token ("--options a b c"), where a plain list takes
+// one value per occurrence ("--options a --options b").
+func isVariadicFlag(flag any) bool {
+	switch f := flag.(type) {
+	case *StringSliceFlag:
+		return f.Variadic
+	case *IntSliceFlag:
+		return f.Variadic
+	case *Int64SliceFlag:
+		return f.Variadic
+	case *Float64SliceFlag:
+		return f.Variadic
+	case *BoolSliceFlag:
+		return f.Variadic
+	}
+	return false
+}
+
+// absorbsPositionals reports positional-side greed: once a slice flag starts
+// collecting bare positional values it takes every remaining one, so nothing
+// declared after it can be filled positionally. True for any positional-capable
+// slice, variadic or not - unlike isVariadicFlag, which is about the flag form.
+func absorbsPositionals(flag any) bool {
+	base := getBaseFlag(flag)
+	return isSliceFlag(flag) && base != nil && !base.FlagOnly
+}
+
 func deepCopyFlag(flag any) any {
 	switch f := flag.(type) {
 	case *BoolFlag:

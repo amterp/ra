@@ -229,7 +229,7 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 	}
 	c.unknownArgs = []string{}
 	c.excessPositionals = []string{}
-	c.lastVariadicFlag = ""
+	c.collectingSlice = ""
 	c.sawFlag = false
 
 	// Add help flags if enabled
@@ -297,7 +297,7 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 
 		// If we're in positional-only mode, treat everything as positional
 		if seenDashDash {
-			if err := c.assignPositionalWithMode(arg, true); err != nil {
+			if err := c.assignPositionalWithMode(arg, posAfterDashDash); err != nil {
 				if cfg.ignoreUnknown {
 					c.unknownArgs = append(c.unknownArgs, arg)
 				} else if !c.collectIfExcessPositional(arg, err) {
@@ -353,17 +353,23 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 				if cfg.variadicUnknownFlags {
 					// Check if we have an active variadic or an unassigned variadic positional.
 					// This allows variadics to be "activated" in two ways:
-					//   1. Already active (lastVariadicFlag != "") from consuming a previous value
+					//   1. Already active (collectingSlice != "") from consuming a previous value
 					//   2. Newly activated by finding the first unassigned variadic positional
 					// This enables: radd test.rad -U (where -U activates the variadic)
-					variadicFlag := c.lastVariadicFlag
+					// Swallowing flag-shaped tokens is raw rest capture, which stays
+					// the variadic's job. A plain list may be the active collector,
+					// but it declines here so the unknown flag stays the error it is.
+					variadicFlag := c.collectingSlice
+					if variadicFlag != "" && !isVariadicFlag(c.flags[variadicFlag]) {
+						variadicFlag = ""
+					}
 					if variadicFlag == "" {
 						variadicFlag = c.findNextUnassignedVariadicPositional()
 					}
 
 					if variadicFlag != "" {
 						// We have a variadic that can consume this unknown flag
-						if err := c.assignPositional(arg); err != nil {
+						if err := c.assignPositionalWithMode(arg, posUnknownFlagToken); err != nil {
 							// If variadic assignment fails, fall back to normal unknown handling
 							if cfg.ignoreUnknown {
 								c.unknownArgs = append(c.unknownArgs, arg)
@@ -372,7 +378,7 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 							}
 						} else {
 							// Successfully assigned - activate the variadic if it wasn't already
-							c.lastVariadicFlag = variadicFlag
+							c.collectingSlice = variadicFlag
 						}
 						i++
 						continue
@@ -387,7 +393,7 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 				return err
 			}
 			c.sawFlag = true
-			c.lastVariadicFlag = "" // Reset variadic state when we see a flag
+			c.collectingSlice = "" // A flag ends the current collection run
 			i += consumed
 		} else {
 			// Handle positional argument
@@ -693,16 +699,9 @@ func (c *Cmd) parseLongFlag(args []string, index int, numberShortsMode bool, cfg
 	case *StringSliceFlag:
 		if hasValue {
 			_, err := c.appendStringSliceValue(f, value)
-			if err == nil && f.Variadic {
-				c.lastVariadicFlag = flagName
-			}
 			return 1, err
 		}
-		consumed, err := c.parseSliceFlag(args, index, f, "--"+flagName, numberShortsMode, cfg)
-		if err == nil && f.Variadic {
-			c.lastVariadicFlag = flagName
-		}
-		return consumed, err
+		return c.parseSliceFlag(args, index, f, "--"+flagName, numberShortsMode, cfg)
 	case *IntSliceFlag:
 		if hasValue {
 			_, err := c.appendIntSliceValue(f, value)
@@ -866,9 +865,6 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 				return 1, err
 			case *StringSliceFlag:
 				_, err := c.appendStringSliceValue(f, value)
-				if err == nil && f.Variadic {
-					c.lastVariadicFlag = flagName
-				}
 				return 1, err
 			case *IntSliceFlag:
 				_, err := c.appendIntSliceValue(f, value)
@@ -1015,18 +1011,12 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					if err != nil {
 						return 0, err
 					}
-					if f.Variadic {
-						c.lastVariadicFlag = flagName
-					}
 					consumed = 1
 				} else {
 					// Use parseSliceFlag for next argument(s)
 					consumed, err := c.parseSliceFlag(args, index, f, "-"+shortStr, numberShortsMode, cfg)
 					if err != nil {
 						return 0, err
-					}
-					if f.Variadic {
-						c.lastVariadicFlag = flagName
 					}
 					return consumed, nil
 				}
@@ -1179,11 +1169,23 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 
 	return consumed, nil
 }
+
+// positionalSource is why a token is being offered to the positional slots. It
+// decides which slots may take it: a plain list declines flag-shaped tokens, and
+// only "--" reopens a collector that a flag already closed.
+type positionalSource int
+
+const (
+	posBare             positionalSource = iota // an ordinary bare token
+	posAfterDashDash                            // everything after "--"
+	posUnknownFlagToken                         // a flag-shaped token offered to variadics
+)
+
 func (c *Cmd) assignPositional(value string) error {
-	return c.assignPositionalWithMode(value, false)
+	return c.assignPositionalWithMode(value, posBare)
 }
 
-func (c *Cmd) assignPositionalWithMode(value string, positionalOnlyMode bool) error {
+func (c *Cmd) assignPositionalWithMode(value string, src positionalSource) error {
 	// Find next unassigned positional flag
 	for _, name := range c.positional {
 		flag := c.flags[name]
@@ -1244,136 +1246,113 @@ func (c *Cmd) assignPositionalWithMode(value string, positionalOnlyMode bool) er
 			if f.FlagOnly {
 				continue
 			}
-			if f.Variadic {
-				handled, err := c.handleVariadicSliceFlag(name, value, positionalOnlyMode, func() error {
-					_, err := c.appendStringSliceValue(f, value)
-					return err
-				})
-				if handled {
-					return err
-				}
-				continue // Skip this variadic if not handled
+			if src == posUnknownFlagToken && !f.Variadic {
+				continue // Only a variadic captures flag-shaped tokens
 			}
-			if c.configured[name] {
-				continue // Already assigned
+			handled, err := c.collectPositionalIntoSlice(name, src, func() error {
+				_, err := c.appendStringSliceValue(f, value)
+				return err
+			})
+			if handled {
+				return err
 			}
-			c.configured[name] = true
-			_, err := c.appendStringSliceValue(f, value)
-			return err
+			continue // This collector is closed; try the next positional
 		case *IntSliceFlag:
 			if f.FlagOnly {
 				continue
 			}
-			if f.Variadic {
-				handled, err := c.handleVariadicSliceFlag(name, value, positionalOnlyMode, func() error {
-					_, err := c.appendIntSliceValue(f, value)
-					return err
-				})
-				if handled {
-					return err
-				}
-				continue // Skip this variadic if not handled
+			if src == posUnknownFlagToken && !f.Variadic {
+				continue // Only a variadic captures flag-shaped tokens
 			}
-			if c.configured[name] {
-				continue // Already assigned
+			handled, err := c.collectPositionalIntoSlice(name, src, func() error {
+				_, err := c.appendIntSliceValue(f, value)
+				return err
+			})
+			if handled {
+				return err
 			}
-			c.configured[name] = true
-			_, err := c.appendIntSliceValue(f, value)
-			return err
+			continue // This collector is closed; try the next positional
 		case *Int64SliceFlag:
 			if f.FlagOnly {
 				continue
 			}
-			if f.Variadic {
-				handled, err := c.handleVariadicSliceFlag(name, value, positionalOnlyMode, func() error {
-					_, err := c.appendInt64SliceValue(f, value)
-					return err
-				})
-				if handled {
-					return err
-				}
-				continue // Skip this variadic if not handled
+			if src == posUnknownFlagToken && !f.Variadic {
+				continue // Only a variadic captures flag-shaped tokens
 			}
-			if c.configured[name] {
-				continue // Already assigned
+			handled, err := c.collectPositionalIntoSlice(name, src, func() error {
+				_, err := c.appendInt64SliceValue(f, value)
+				return err
+			})
+			if handled {
+				return err
 			}
-			c.configured[name] = true
-			_, err := c.appendInt64SliceValue(f, value)
-			return err
+			continue // This collector is closed; try the next positional
 		case *Float64SliceFlag:
 			if f.FlagOnly {
 				continue
 			}
-			if f.Variadic {
-				handled, err := c.handleVariadicSliceFlag(name, value, positionalOnlyMode, func() error {
-					_, err := c.appendFloat64SliceValue(f, value)
-					return err
-				})
-				if handled {
-					return err
-				}
-				continue // Skip this variadic if not handled
+			if src == posUnknownFlagToken && !f.Variadic {
+				continue // Only a variadic captures flag-shaped tokens
 			}
-			if c.configured[name] {
-				continue // Already assigned
+			handled, err := c.collectPositionalIntoSlice(name, src, func() error {
+				_, err := c.appendFloat64SliceValue(f, value)
+				return err
+			})
+			if handled {
+				return err
 			}
-			c.configured[name] = true
-			_, err := c.appendFloat64SliceValue(f, value)
-			return err
+			continue // This collector is closed; try the next positional
 		case *BoolSliceFlag:
 			if f.FlagOnly {
 				continue
 			}
-			if f.Variadic {
-				handled, err := c.handleVariadicSliceFlag(name, value, positionalOnlyMode, func() error {
-					_, err := c.appendBoolSliceValue(f, value)
-					return err
-				})
-				if handled {
-					return err
-				}
-				continue // Skip this variadic if not handled
+			if src == posUnknownFlagToken && !f.Variadic {
+				continue // Only a variadic captures flag-shaped tokens
 			}
-			if c.configured[name] {
-				continue // Already assigned
+			handled, err := c.collectPositionalIntoSlice(name, src, func() error {
+				_, err := c.appendBoolSliceValue(f, value)
+				return err
+			})
+			if handled {
+				return err
 			}
-			c.configured[name] = true
-			_, err := c.appendBoolSliceValue(f, value)
-			return err
+			continue // This collector is closed; try the next positional
 		}
 	}
 
 	return &TooManyPositionalArgsError{Unused: []string{value}}
 }
 
-// handleVariadicSliceFlag handles the common logic for variadic slice flags
-// Returns (handled, error) where handled indicates if the flag was processed
-func (c *Cmd) handleVariadicSliceFlag(
+// collectPositionalIntoSlice offers a bare positional value to a slice flag,
+// reporting whether that flag took it. Collection is greedy but does not resume:
+// the run continues while this flag stays the active collector, and any flag
+// token ends it for good, which is what lets several collectors divide up one
+// argv. Applies to plain lists and variadics alike - they differ on the flag
+// side, not here.
+func (c *Cmd) collectPositionalIntoSlice(
 	name string,
-	value string,
-	positionalOnlyMode bool,
+	src positionalSource,
 	appendFunc func() error,
 ) (bool, error) {
-	// Variadic positional - collect if this is the current one or no flag seen since last variadic
-	if c.lastVariadicFlag == name {
+	// The active collector keeps taking values.
+	if c.collectingSlice == name {
 		c.configured[name] = true
 		return true, appendFunc()
 	}
-	// In positional-only mode (after --), continue appending to any configured variadic flag
-	if positionalOnlyMode && c.configured[name] {
+	// "--" reopens a collector that a flag closed.
+	if src == posAfterDashDash && c.configured[name] {
 		return true, appendFunc()
 	}
-	// If we saw a flag since last variadic, skip variadic flags that have already been used
+	// A flag has closed this one since it last collected; it does not resume.
 	if c.sawFlag && c.configured[name] {
-		return false, nil // Skip this variadic
+		return false, nil
 	}
-	// Start new variadic only if we haven't seen a flag or this is a new variadic
-	if !c.sawFlag || c.lastVariadicFlag == "" {
+	// Otherwise a collector that hasn't run yet may open.
+	if !c.sawFlag || c.collectingSlice == "" {
 		c.configured[name] = true
-		c.lastVariadicFlag = name
+		c.collectingSlice = name
 		return true, appendFunc()
 	}
-	// Skip this variadic if we've seen a flag
 	return false, nil
 }
 

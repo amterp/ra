@@ -88,7 +88,7 @@ cmd.ParseOrError([]string{})
 ### Slice Flag Options
 
 - **Separator**: Character to split a single argument into multiple values.
-- **Variadic**: Consume multiple consecutive arguments until the next flag.
+- **Variadic**: Consume multiple consecutive arguments after the flag's own token, until the next flag. This is about the flag form only - every positional-capable slice flag collects bare positional values greedily, variadic or not.
 
 ## Argument Parsing
 
@@ -114,6 +114,9 @@ Parsing behavior can be customized using functional options (`ParseOpt`):
 - Unless explicitly marked as `PositionalOnly`, all flags are also available as named flags (e.g., `--flag-name`).
 - Positional assignment is left-to-right based on registration order.
 - If a flag is set via a named flag, it's skipped in positional assignment.
+- A slice flag collects bare positional values greedily: it takes every one until a flag token appears, and does not resume afterwards. Several slice flags therefore divide one argv into runs separated by flags.
+- Because a slice positional absorbs the rest, positional slots declared after it can only be filled by name. Registering a `PositionalOnly` flag after one is a registration error.
+- `--` reopens the collector that was active most recently.
 
 ### Flag Precedence
 
@@ -141,7 +144,9 @@ Parsing behavior can be customized using functional options (`ParseOpt`):
 
 - **Multiple occurrences**: `--flag value1 --flag value2` → `["value1", "value2"]`
 - **Separator**: `--flag "value1,value2"` with separator "," → `["value1", "value2"]`
+- **Non-variadic**: `--flag value1 value2` → `["value1"]`; the flag takes exactly one value, and `value2` falls through to the positional slots.
 - **Variadic**: `--flag value1 value2` → `["value1", "value2"]` (stops at next flag)
+- **Positional**: `value1 value2` → `["value1", "value2"]` for both forms.
 - **Combined**: Variadic + separator processes both mechanisms.
 
 ### Bool Flag Clustering

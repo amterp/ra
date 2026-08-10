@@ -103,7 +103,7 @@ Arguments:
 - Display order: Description. Default. Constraints. Relationships.
 - Argument ordering: All arguments appear in registration order. The only exception is that non-positional arguments (flag-only args and bool flags) are moved to appear after positional arguments, but within each group (positional vs non-positional), registration order is preserved.
 - Use plain argument names (no `<>` or `[]` brackets)
-- Variadic optional flags show as `[files...]` format
+- Flags that take several values show as `[files...]` format
 
 ## Flag Display Format
 
@@ -130,7 +130,7 @@ Arguments:
 - **IntFlag**: `int`
 - **Int64Flag**: `int64`
 - **Float64Flag**: `float`
-- **SliceFlag[T]**: `T` for single values, `T...` for variadic (e.g., `strs`, `strs...`)
+- **SliceFlag[T]**: `T` for single values, `T...` for variadic (e.g., `strs`, `strs...`). This column describes the *flag* form, which is why a non-variadic list stays `strs` even though it collects positionals greedily.
 
 **Note**: Type names shown above match the current code implementation. The code uses abbreviated forms like `str` instead of `string`.
 
@@ -156,13 +156,14 @@ Arguments:
 **Slice Constraints:**
 - `Separator: ","` (if custom separator specified)
 
-**Variadic Flags:**
+**Slice Flags:**
 - All variadic flags are inherently optional (default to empty slices)
 - `SetOptional()` and `SetDefault()` with empty slice have no effect on variadic flags
-- Variadic flags always display as `[type...]` in synopsis (never `<type...>`)
-- **Variadic Positional Precedence**: A variadic positional arg consumes all remaining positional arguments until a flag is encountered
-- **Synopsis Rule**: No positional args appear in synopsis after the first variadic positional arg (they can only be set via flags)
-- **Registration Error**: Registering a positional-only arg after a variadic arg is an error (impossible to set positionally)
+- Variadic flags always display as `[name...]` in synopsis (never `<name...>`)
+- A non-variadic list is required unless it has a default, so it displays as `<name...>` or `[name...]` accordingly
+- **List Positional Precedence**: A list positional arg consumes all remaining positional arguments until a flag is encountered. This holds for variadic and non-variadic lists alike; a flag-only list absorbs nothing
+- **Synopsis Rule**: No positional args appear in synopsis after the first list positional arg (they can only be set via flags)
+- **Registration Error**: Registering a positional-only arg after a list positional arg is an error (impossible to set positionally)
 
 ### Default Values
 

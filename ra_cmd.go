@@ -61,7 +61,7 @@ type Cmd struct {
 	configured        map[string]bool // specified flags from flags.
 	unknownArgs       []string        // unknown args when ignoreUnknown is true
 	excessPositionals []string        // positionals no flag could consume; reported together after parsing
-	lastVariadicFlag  string          // last variadic flag that was used
+	collectingSlice   string          // slice flag currently collecting bare positionals
 	sawFlag           bool            // true if we've seen a flag since the last variadic
 }
 
@@ -178,7 +178,7 @@ func (c *Cmd) ResetParseState() {
 	}
 	c.configured = make(map[string]bool)
 	c.unknownArgs = []string{}
-	c.lastVariadicFlag = ""
+	c.collectingSlice = ""
 	c.sawFlag = false
 
 	// Reset all flag values to their defaults
@@ -232,33 +232,18 @@ func (c *Cmd) RegisterCmd(subCmd *Cmd) (*bool, error) {
 	return subCmd.used, nil
 }
 
-func (c *Cmd) validatePositionalOnlyAfterVariadic(flagName string) error {
-	// Check if there's already a variadic positional flag
+// validatePositionalOnlyAfterListPositional rejects a positional-only flag
+// registered after a list positional. A list positional absorbs every remaining
+// bare value, so nothing behind it can be filled positionally - and a
+// positional-only flag has no other way in.
+func (c *Cmd) validatePositionalOnlyAfterListPositional(flagName string) error {
 	for _, existingName := range c.positional {
-		existingFlag := c.flags[existingName]
-
-		// Check if this existing flag is variadic
-		switch f := existingFlag.(type) {
-		case *StringSliceFlag:
-			if f.Variadic {
-				return fmt.Errorf("cannot register positional-only flag %q after variadic positional flag %q (positional-only flags cannot be set after variadic flags)", flagName, existingName)
-			}
-		case *IntSliceFlag:
-			if f.Variadic {
-				return fmt.Errorf("cannot register positional-only flag %q after variadic positional flag %q (positional-only flags cannot be set after variadic flags)", flagName, existingName)
-			}
-		case *Int64SliceFlag:
-			if f.Variadic {
-				return fmt.Errorf("cannot register positional-only flag %q after variadic positional flag %q (positional-only flags cannot be set after variadic flags)", flagName, existingName)
-			}
-		case *Float64SliceFlag:
-			if f.Variadic {
-				return fmt.Errorf("cannot register positional-only flag %q after variadic positional flag %q (positional-only flags cannot be set after variadic flags)", flagName, existingName)
-			}
-		case *BoolSliceFlag:
-			if f.Variadic {
-				return fmt.Errorf("cannot register positional-only flag %q after variadic positional flag %q (positional-only flags cannot be set after variadic flags)", flagName, existingName)
-			}
+		if isSliceFlag(c.flags[existingName]) {
+			return fmt.Errorf(
+				"cannot register positional-only flag %q after list positional flag %q "+
+					"(a list positional absorbs all remaining positional args)",
+				flagName, existingName,
+			)
 		}
 	}
 	return nil

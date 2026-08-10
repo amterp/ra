@@ -4947,22 +4947,6 @@ func Test_TooManyPositionals_AfterDashDash(t *testing.T) {
 	assert.Equal(t, "a", *first)
 }
 
-func Test_TooManyPositionals_NonVariadicSliceConsumesOne(t *testing.T) {
-	// A non-variadic slice positional consumes exactly one positional; the rest
-	// must all be reported, not just the first.
-	fs := NewCmd("test")
-
-	targets, _ := NewStringSlice("targets").Register(fs)
-
-	parseErr := fs.ParseOrError([]string{"a", "b", "c"})
-	assert.Error(t, parseErr)
-
-	var tooMany *TooManyPositionalArgsError
-	assert.True(t, errors.As(parseErr, &tooMany))
-	assert.Equal(t, []string{"b", "c"}, tooMany.Unused)
-	assert.Equal(t, []string{"a"}, *targets)
-}
-
 func Test_TooManyPositionals_TypeErrorsStillAbort(t *testing.T) {
 	// Genuine conversion failures are not "excess" - they must abort immediately.
 	fs := NewCmd("test")
@@ -5291,4 +5275,155 @@ func Test_DashValue_HelpStillWins(t *testing.T) {
 	NewString("name").Register(fs)
 
 	assert.Equal(t, HelpInvokedErr, fs.ParseOrError([]string{"--name", "--help"}))
+}
+
+// ===========================================
+// LIST POSITIONAL COLLECTION
+// ===========================================
+
+func Test_ListPositional_CollectsAllBareValues(t *testing.T) {
+	// A list positional used to fill exactly one slot, so the invocation
+	// everyone reaches for first ("mycmd a b c") failed as excess positionals.
+	fs := NewCmd("test")
+
+	targets, _ := NewStringSlice("targets").Register(fs)
+
+	assert.Nil(t, fs.ParseOrError([]string{"a", "b", "c"}))
+	assert.Equal(t, []string{"a", "b", "c"}, *targets)
+}
+
+func Test_ListPositional_StopsAtFlagAndDoesNotResume(t *testing.T) {
+	fs := NewCmd("test")
+
+	targets, _ := NewStringSlice("targets").Register(fs)
+	verbose, _ := NewBool("verbose").SetShort("v").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"a", "b", "-v", "c", "d"})
+	assert.Equal(t, "Too many positional arguments. Unused: [c, d]", parseErr.Error())
+	assert.Equal(t, []string{"a", "b"}, *targets)
+	assert.True(t, *verbose)
+}
+
+func Test_ListPositional_FlagTakesExactlyOneValue(t *testing.T) {
+	// The headline case for the two spellings: bare values are greedy, a flag
+	// takes one value. "*tokens" collects the run, "-c" takes only c1.
+	fs := NewCmd("test")
+
+	tokens, _ := NewStringSlice("tokens").SetVariadic(true).Register(fs)
+	filter, _ := NewStringSlice("filter").SetShort("c").SetDefault([]string{}).Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"t1", "t2", "t3", "-c", "c1", "c2"})
+	assert.Equal(t, "Too many positional arguments. Unused: [c2]", parseErr.Error())
+	assert.Equal(t, []string{"t1", "t2", "t3"}, *tokens)
+	assert.Equal(t, []string{"c1"}, *filter)
+}
+
+func Test_ListPositional_ThenFlagAppends(t *testing.T) {
+	fs := NewCmd("test")
+
+	filter, _ := NewStringSlice("filter").SetShort("c").SetDefault([]string{}).Register(fs)
+
+	assert.Nil(t, fs.ParseOrError([]string{"x", "y", "-c", "c1"}))
+	assert.Equal(t, []string{"x", "y", "c1"}, *filter)
+}
+
+func Test_ListPositional_DoesNotResumeAfterItsOwnFlag(t *testing.T) {
+	// Non-resumption is what makes multiple collection runs work; it applies to
+	// a list just as it does to a variadic.
+	fs := NewCmd("test")
+
+	filter, _ := NewStringSlice("filter").SetShort("c").SetDefault([]string{}).Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"-c", "c1", "x", "y"})
+	assert.Equal(t, "Too many positional arguments. Unused: [x, y]", parseErr.Error())
+	assert.Equal(t, []string{"c1"}, *filter)
+}
+
+func Test_ListPositional_DoesNotSwallowUnknownFlags(t *testing.T) {
+	// Raw rest capture stays the variadic's job. A plain list must let an
+	// unknown flag be the error it is, even under WithVariadicUnknownFlags.
+	fs := NewCmd("test")
+
+	targets, _ := NewStringSlice("targets").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"a", "--tpyo"}, WithVariadicUnknownFlags(true))
+	assert.Equal(t, "unknown flag: --tpyo", parseErr.Error())
+	assert.Equal(t, []string{"a"}, *targets)
+}
+
+func Test_ListPositional_UnknownFlagGoesToLaterVariadic(t *testing.T) {
+	fs := NewCmd("test")
+
+	targets, _ := NewStringSlice("targets").Register(fs)
+	rest, _ := NewStringSlice("rest").SetVariadic(true).Register(fs)
+
+	assert.Nil(t, fs.ParseOrError([]string{"a", "--tpyo"}, WithVariadicUnknownFlags(true)))
+	assert.Equal(t, []string{"a"}, *targets)
+	assert.Equal(t, []string{"--tpyo"}, *rest)
+}
+
+func Test_ListPositional_CollectsNegativeNumbers(t *testing.T) {
+	fs := NewCmd("test")
+
+	nums, _ := NewIntSlice("nums").Register(fs)
+
+	assert.Nil(t, fs.ParseOrError([]string{"1", "-5", "2"}))
+	assert.Equal(t, []int{1, -5, 2}, *nums)
+}
+
+func Test_ListPositional_ResumesAfterDoubleDash(t *testing.T) {
+	fs := NewCmd("test")
+
+	filter, _ := NewStringSlice("filter").SetShort("c").SetDefault([]string{}).Register(fs)
+
+	assert.Nil(t, fs.ParseOrError([]string{"-c", "c1", "--", "x", "y"}))
+	assert.Equal(t, []string{"c1", "x", "y"}, *filter)
+}
+
+func Test_ListPositional_BlocksLaterPositional(t *testing.T) {
+	// The breaking consequence, pinned: a list positional absorbs everything
+	// after it, so a later positional can only be set by name.
+	fs := NewCmd("test")
+
+	tags, _ := NewStringSlice("tags").Register(fs)
+	name, _ := NewString("name").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"a", "b"})
+	assert.Equal(t, "Missing required arguments: [name]", parseErr.Error())
+	assert.Equal(t, []string{"a", "b"}, *tags)
+
+	fs2 := NewCmd("test")
+	tags2, _ := NewStringSlice("tags").Register(fs2)
+	name2, _ := NewString("name").Register(fs2)
+	assert.Nil(t, fs2.ParseOrError([]string{"a", "b", "--name", "n"}))
+	assert.Equal(t, []string{"a", "b"}, *tags2)
+	assert.Equal(t, "n", *name2)
+	_ = name
+}
+
+func Test_ListPositional_PositionalOnlyAfterListIsRegistrationError(t *testing.T) {
+	fs := NewCmd("test")
+
+	_, err := NewStringSlice("files").Register(fs)
+	assert.NoError(t, err)
+
+	_, err = NewString("output").SetPositionalOnly(true).Register(fs)
+	assert.Equal(
+		t,
+		`cannot register positional-only flag "output" after list positional flag "files" (a list positional absorbs all remaining positional args)`,
+		err.Error(),
+	)
+}
+
+func Test_ListPositional_FlagOnlyListTakesOneValue(t *testing.T) {
+	// A flag-only list is not positional at all, so it keeps taking exactly one
+	// value per occurrence and never absorbs bare values.
+	fs := NewCmd("test")
+
+	first, _ := NewString("first").Register(fs)
+	tags, _ := NewStringSlice("tags").SetFlagOnly(true).Register(fs)
+
+	assert.Nil(t, fs.ParseOrError([]string{"a", "--tags", "x", "--tags", "y"}))
+	assert.Equal(t, "a", *first)
+	assert.Equal(t, []string{"x", "y"}, *tags)
 }

@@ -418,8 +418,8 @@ func (c *Cmd) completeSubcommandsAndPositionals(
 	subCmdCount := len(candidates)
 
 	// Find the positional arg at the current index (skipping already-consumed ones).
-	// Variadic positionals absorb all remaining positions, so once we reach one
-	// it's always the active positional regardless of how many values were consumed.
+	// List positionals absorb all remaining positions, so once we reach one it's
+	// always the active positional regardless of how many values were consumed.
 	skipped := 0
 	for _, name := range c.positional {
 		flag := c.flags[name]
@@ -428,7 +428,7 @@ func (c *Cmd) completeSubcommandsAndPositionals(
 			continue
 		}
 
-		if !isVariadicFlag(flag) && skipped < positionalCount {
+		if !isSliceFlag(flag) && skipped < positionalCount {
 			skipped++
 			continue
 		}
@@ -523,30 +523,6 @@ func (c *Cmd) GenBashCompletion(w io.Writer) error {
 // GenZshCompletion writes the zsh completion script for this command to the given writer.
 func (c *Cmd) GenZshCompletion(w io.Writer) error {
 	return GenZshCompletionAs(w, c.name, c.name)
-}
-
-func isSliceFlag(flag any) bool {
-	switch flag.(type) {
-	case *StringSliceFlag, *IntSliceFlag, *Int64SliceFlag, *Float64SliceFlag, *BoolSliceFlag:
-		return true
-	}
-	return false
-}
-
-func isVariadicFlag(flag any) bool {
-	switch f := flag.(type) {
-	case *StringSliceFlag:
-		return f.Variadic
-	case *IntSliceFlag:
-		return f.Variadic
-	case *Int64SliceFlag:
-		return f.Variadic
-	case *Float64SliceFlag:
-		return f.Variadic
-	case *BoolSliceFlag:
-		return f.Variadic
-	}
-	return false
 }
 
 // flagConsumedArgs returns how many args a flag token consumes (including itself).

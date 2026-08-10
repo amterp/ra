@@ -127,7 +127,7 @@ func (f *Int64Flag) RegisterWithPtr(cmd *Cmd, ptr *int64, opts ...RegisterOption
 	if !flag.FlagOnly {
 		// Check for positional-only after variadic error
 		if flag.PositionalOnly {
-			if err := cmd.validatePositionalOnlyAfterVariadic(f.Name); err != nil {
+			if err := cmd.validatePositionalOnlyAfterListPositional(f.Name); err != nil {
 				return err
 			}
 		}

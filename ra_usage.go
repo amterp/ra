@@ -163,17 +163,30 @@ func (c *Cmd) generateCommandsSection(isLongHelp bool) string {
 		cmdPart := fmt.Sprintf("  %s", name)
 		sb.WriteString(cmdPart)
 
+		// Mark the default so the command list explains itself. Rendered even
+		// with no description, which the description branch below would skip -
+		// an unmarked default is a command the user has no way to know they
+		// can omit.
+		trailer := ""
 		if subCmd.description != "" {
 			// Only show first line of description in command list for better readability
-			firstLine := strings.Split(subCmd.description, "\n")[0]
+			trailer = strings.Split(subCmd.description, "\n")[0]
+		}
+		if name == c.defaultSubCmdName {
+			if trailer != "" {
+				trailer += " "
+			}
+			trailer += "(default)"
+		}
 
+		if trailer != "" {
 			// Calculate padding to align descriptions
 			padding := maxWidth - len(cmdPart)
 			if padding < 1 {
 				padding = 1
 			}
 			sb.WriteString(strings.Repeat(" ", padding))
-			sb.WriteString(firstLine)
+			sb.WriteString(trailer)
 		}
 		sb.WriteString("\n")
 	}

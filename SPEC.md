@@ -166,9 +166,32 @@ invoked, err := cmd.RegisterCmd(subCmd)
 
 ### Subcommand Parsing
 
-- Subcommands must appear immediately after the parent command.
 - The first positional argument matching a subcommand name invokes that subcommand.
 - If no match is found, parsing continues with the parent command's arguments.
+
+### Default Subcommands
+
+`SetDefaultCmd(name)` marks an already-registered subcommand as the one to route
+to when none is named. It must be called after that subcommand is registered, and
+it is refused if the parent has a list positional, which would absorb the values
+the default was meant to receive.
+
+- A named subcommand always wins. That is what keeps the default's own name
+  usable as an escape hatch for a value colliding with a sibling's name.
+- Otherwise the default receives the first token this command cannot consume
+  itself - an excess positional, or a flag it does not recognize - along with
+  everything after it. The token is *not* consumed as a command name; it is the
+  default's first value.
+- A bare invocation routes to the default too. With `SetAutoHelpOnNoArgs(true)`,
+  a bare invocation whose default requires an argument shows this command's help
+  instead, so the other subcommands stay discoverable.
+- `--` suppresses subcommand lookup but not default routing, making
+  `cmd -- <value>` the conventional escape when a value looks like a subcommand
+  name.
+- Help still wins over routing: `--help` or `-h` anywhere shows this command's
+  help, not the default's.
+- With no default set, every one of these paths behaves as it did before: an
+  excess positional or an unknown flag is an error.
 
 ### Global Flags
 

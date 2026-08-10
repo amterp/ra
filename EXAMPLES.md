@@ -354,3 +354,37 @@ mycmd aaa bbb --arg2 ccc ddd -e fff
 
 Here, we consume `ccc` and `ddd` and assign them to `arg2`, but its variadic is then ended by `-e`. We then read `fff`,
 check to see our next unfilled positional arg (`arg4`), and assign to that.
+
+## Default Subcommand
+
+A tool with a primary action plus a few subcommands. `SetDefaultCmd` makes the
+primary action reachable without naming it, while keeping it named for when a
+value would otherwise be mistaken for a subcommand.
+
+```go
+root := ra.NewCmd("remind")
+
+add := ra.NewCmd("add")
+tokens, _ := ra.NewStringSlice("tokens").Register(add)
+root.RegisterCmd(add)
+
+list := ra.NewCmd("list")
+root.RegisterCmd(list)
+
+root.SetDefaultCmd("add")
+```
+
+```
+remind 15m standup     -> add, tokens = ["15m", "standup"]
+remind list            -> list
+remind add list        -> add, tokens = ["list"]      # explicit escape
+remind -- list         -> add, tokens = ["list"]      # conventional escape
+```
+
+The command list marks it, so the shorter spelling is discoverable:
+
+```
+Commands:
+  add    Add a reminder. (default)
+  list   Show upcoming reminders.
+```

@@ -139,6 +139,9 @@ func (c *Cmd) generateCommandInfoSectionWithIndent(depth int) string {
 	// Subcommands
 	if len(c.subCmds) > 0 {
 		sb.WriteString(fmt.Sprintf("%s  Subcommands (%d): %s\n", indent, len(c.subCmds), BoldS(c.getSubcommandNames())))
+		if c.defaultSubCmdName != "" {
+			sb.WriteString(fmt.Sprintf("%s  Default Subcommand: %s\n", indent, BoldS(c.defaultSubCmdName)))
+		}
 	} else {
 		sb.WriteString(fmt.Sprintf("%s  Subcommands: %s\n", indent, CyanS("none")))
 	}

@@ -266,8 +266,11 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 		}
 	}
 
-	// Check for auto-help: if enabled, no args provided, and command has required flags
-	if c.autoHelpOnNoArgs && len(args) == 0 && c.hasRequiredFlags() {
+	// Check for auto-help: if enabled, no args provided, and something on this
+	// invocation would have required an argument. The default sub-command counts:
+	// routing a bare invocation into it would answer with "missing required
+	// argument", which hides the fact that other commands exist. Help says both.
+	if c.autoHelpOnNoArgs && len(args) == 0 && (c.hasRequiredFlags() || c.defaultRequiresArgs()) {
 		return newHelpInvokedError(
 			c,                    // cmd
 			0,                    // exitCode
@@ -298,6 +301,13 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 		// If we're in positional-only mode, treat everything as positional
 		if seenDashDash {
 			if err := c.assignPositionalWithMode(arg, posAfterDashDash); err != nil {
+				// `--` suppresses sub-command lookup, so this is how a caller
+				// says "route to the default even though the value looks like
+				// a command name". Re-prefix `--` so it keeps meaning that all
+				// the way down.
+				if routed, handled := c.routeToDefault(append([]string{"--"}, args[i:]...), opts...); handled {
+					return routed
+				}
 				if cfg.ignoreUnknown {
 					c.unknownArgs = append(c.unknownArgs, arg)
 				} else if !c.collectIfExcessPositional(arg, err) {
@@ -311,24 +321,10 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 		// Check for subcommand first (only if not in positional-only mode)
 		if !strings.HasPrefix(arg, "-") {
 			if subCmd, exists := c.subCmds[arg]; exists {
-				// Delegating returns the child's result directly, so excess
-				// positionals collected so far would be silently dropped -
-				// report them now instead (pre-collect fail-fast behavior).
-				if len(c.excessPositionals) > 0 {
-					return &TooManyPositionalArgsError{Unused: c.excessPositionals}
-				}
-				*subCmd.used = true
-				// Apply global flags to subcommand before parsing
-				if err := c.applyGlobalFlags(subCmd); err != nil {
-					return err
-				}
-				// Apply global configured state before parsing
-				for _, globalFlagName := range c.globalFlags {
-					if c.configured[globalFlagName] {
-						subCmd.configured[globalFlagName] = true
-					}
-				}
-				return subCmd.parseWithPreserveState(args[i+1:], true, opts...)
+				// The named command wins over the default, which is what makes
+				// the default's own name a usable escape hatch for a value that
+				// collides with a sibling's.
+				return c.dispatchTo(subCmd, args[i+1:], opts...)
 			}
 		}
 
@@ -339,6 +335,9 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 				if err.Error() == "not a flag: "+arg {
 					// This is a negative number, treat as positional
 					if err := c.assignPositional(arg); err != nil {
+						if routed, handled := c.routeToDefault(args[i:], opts...); handled {
+							return routed
+						}
 						if cfg.ignoreUnknown {
 							c.unknownArgs = append(c.unknownArgs, arg)
 						} else if !c.collectIfExcessPositional(arg, err) {
@@ -371,6 +370,9 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 						// We have a variadic that can consume this unknown flag
 						if err := c.assignPositionalWithMode(arg, posUnknownFlagToken); err != nil {
 							// If variadic assignment fails, fall back to normal unknown handling
+							if routed, handled := c.routeToDefault(args[i:], opts...); handled {
+								return routed
+							}
 							if cfg.ignoreUnknown {
 								c.unknownArgs = append(c.unknownArgs, arg)
 							} else if !c.collectIfExcessPositional(arg, err) {
@@ -383,6 +385,14 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 						i++
 						continue
 					}
+				}
+
+				// A flag this command has never heard of may still belong to
+				// the default. That matters because a default's own flags are
+				// registered on it, not here, so without this only the
+				// positional spellings of the default would be reachable.
+				if routed, handled := c.routeToDefault(args[i:], opts...); handled {
+					return routed
 				}
 
 				if cfg.ignoreUnknown {
@@ -398,6 +408,11 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 		} else {
 			// Handle positional argument
 			if err := c.assignPositional(arg); err != nil {
+				// Nothing here can hold this value. If a default exists, the
+				// value is its first argument rather than an error.
+				if routed, handled := c.routeToDefault(args[i:], opts...); handled {
+					return routed
+				}
 				if cfg.ignoreUnknown {
 					c.unknownArgs = append(c.unknownArgs, arg)
 				} else if !c.collectIfExcessPositional(arg, err) {
@@ -434,6 +449,15 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 		}
 	}
 
+	// Reaching here means no sub-command was named at this level - a named one
+	// returns from the loop. A default takes the invocation, including the bare
+	// one, which is what makes `tool <args>` work without naming a command.
+	// After the help scan above, so `tool -h` still shows this level's help
+	// rather than the default's.
+	if routed, handled := c.routeToDefault(nil, opts...); handled {
+		return routed
+	}
+
 	// Report all unconsumed positionals together, now that flags after them have
 	// still been parsed and help (above) has had a chance to win.
 	if len(c.excessPositionals) > 0 {
@@ -442,6 +466,45 @@ func (c *Cmd) parseWithPreserveState(args []string, preserveConfigured bool, opt
 
 	// Validate required flags
 	return c.validateRequired()
+}
+
+// dispatchTo hands the rest of the command line to a sub-command. Both the
+// named route and the default route go through here: the "was used" flag, the
+// global-flag cascade and the configured-state carry-over all have to happen
+// identically, and a second copy is where they would quietly diverge.
+func (c *Cmd) dispatchTo(subCmd *Cmd, rest []string, opts ...ParseOpt) error {
+	// Delegating returns the child's result directly, so excess positionals
+	// collected so far would be silently dropped - report them now instead
+	// (pre-collect fail-fast behavior).
+	if len(c.excessPositionals) > 0 {
+		return &TooManyPositionalArgsError{Unused: c.excessPositionals}
+	}
+	*subCmd.used = true
+	// Apply global flags to subcommand before parsing
+	if err := c.applyGlobalFlags(subCmd); err != nil {
+		return err
+	}
+	// Apply global configured state before parsing
+	for _, globalFlagName := range c.globalFlags {
+		if c.configured[globalFlagName] {
+			subCmd.configured[globalFlagName] = true
+		}
+	}
+	return subCmd.parseWithPreserveState(rest, true, opts...)
+}
+
+// routeToDefault hands args to the default sub-command, if one is set. The
+// caller passes the offending token *included* - unlike a named dispatch, the
+// token is not a command name being consumed, it is the default's first value.
+//
+// Returns handled=false when there is no default, leaving the caller to report
+// its original error.
+func (c *Cmd) routeToDefault(rest []string, opts ...ParseOpt) (error, bool) {
+	def := c.defaultCmd()
+	if def == nil {
+		return nil, false
+	}
+	return c.dispatchTo(def, rest, opts...), true
 }
 
 // collectIfExcessPositional records value for end-of-parse reporting if err is a
@@ -2505,6 +2568,13 @@ func (c *Cmd) isFlagExcludedByConfiguredFlag(flagName string) bool {
 }
 
 // hasRequiredFlags returns true if the command has any required flags
+// defaultRequiresArgs reports whether routing a bare invocation to the default
+// sub-command would immediately fail for want of an argument.
+func (c *Cmd) defaultRequiresArgs() bool {
+	def := c.defaultCmd()
+	return def != nil && def.hasRequiredFlags()
+}
+
 func (c *Cmd) hasRequiredFlags() bool {
 	// Check positional flags first
 	for _, name := range c.positional {

@@ -42,6 +42,7 @@ type Cmd struct {
 	shadowedShortFlags    map[string]bool // global flags that lost their short flag to non-global flags (short collisions)
 	shadowedNameFlags     map[string]bool // global flags that lost their name to non-global flags (name collisions)
 	subCmds               map[string]*Cmd
+	defaultSubCmdName     string            // sub-command to route to when none is named
 	shortToName           map[string]string // short flag -> full name mapping
 
 	// completion
@@ -230,6 +231,45 @@ func (c *Cmd) RegisterCmd(subCmd *Cmd) (*bool, error) {
 	}
 
 	return subCmd.used, nil
+}
+
+// SetDefaultCmd marks an already-registered sub-command as this command's
+// default: tokens this command cannot consume itself, and a bare invocation,
+// route to it instead of erroring. The default stays invokable by its own name,
+// which is what lets a caller disambiguate a value that collides with a sibling
+// command's name (`--` does the same job).
+//
+// Must be called after the sub-command is registered, so a typo is an error
+// rather than a silently inert default.
+//
+// A command with a positional-capable list arg is a poor host for a default:
+// the list absorbs every bare value, so nothing is ever left over to route and
+// the default only fires on a bare invocation. That is legal but rarely meant,
+// so it is rejected here rather than debugged later.
+func (c *Cmd) SetDefaultCmd(name string) error {
+	if _, exists := c.subCmds[name]; !exists {
+		return fmt.Errorf("cannot set default command %q: not registered", name)
+	}
+	if c.defaultSubCmdName != "" && c.defaultSubCmdName != name {
+		return fmt.Errorf("default command already set to %q", c.defaultSubCmdName)
+	}
+	for _, flagName := range c.positional {
+		if isSliceFlag(c.flags[flagName]) {
+			return fmt.Errorf(
+				"cannot set default command %q: %q is a list positional and would absorb the values meant for it",
+				name, flagName)
+		}
+	}
+	c.defaultSubCmdName = name
+	return nil
+}
+
+// defaultCmd returns the sub-command to route to when none is named, or nil.
+func (c *Cmd) defaultCmd() *Cmd {
+	if c.defaultSubCmdName == "" {
+		return nil
+	}
+	return c.subCmds[c.defaultSubCmdName]
 }
 
 // validatePositionalOnlyAfterListPositional rejects a positional-only flag

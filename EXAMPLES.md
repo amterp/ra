@@ -160,6 +160,42 @@ mycmd -1 --arg2 -2 -3.4
 
 ---
 
+## Values that look like flags
+
+A `-`-prefixed token is read as a flag, never as the value of the flag before it.
+
+```sh
+mycmd --arg1 --arg2
+```
+
+This is invalid: `--arg1` has no value. Reach for `=` to pass the token literally.
+
+```sh
+mycmd --arg1=--arg2
+```
+
+| Declared Arg | Value    |
+|--------------|----------|
+| `arg1: str`  | `--arg2` |
+
+Two shapes are still values. A bare `-` is the stdin/stdout convention, and a
+number-typed arg takes a negative number.
+
+```sh
+mycmd --arg1 - --arg2 -5
+```
+
+| Declared Arg | Value |
+|--------------|-------|
+| `arg1: str`  | `-`   |
+| `arg2: int`  | `-5`  |
+
+The negative-number exception is typed: `--arg2 -5` works because `arg2` is an
+int. Against a `str` arg, `-5` is a flag like any other, and `--arg1=-5` is how
+you say you meant it.
+
+---
+
 ## Number shorts enables 'number shorts mode'
 
 If any arg defines an int short, we enter 'number shorts mode'.

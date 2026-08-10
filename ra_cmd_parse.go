@@ -593,7 +593,7 @@ func (c *Cmd) parseFlag(args []string, index int, numberShortsMode bool, cfg *pa
 
 	if strings.HasPrefix(arg, "--") {
 		// Long flag
-		return c.parseLongFlag(args, index, cfg)
+		return c.parseLongFlag(args, index, numberShortsMode, cfg)
 	} else if strings.HasPrefix(arg, "-") {
 		// Short flag(s)
 		return c.parseShortFlag(args, index, numberShortsMode, cfg)
@@ -602,7 +602,7 @@ func (c *Cmd) parseFlag(args []string, index int, numberShortsMode bool, cfg *pa
 	return 0, fmt.Errorf("invalid flag: %s", arg)
 }
 
-func (c *Cmd) parseLongFlag(args []string, index int, cfg *parseCfg) (int, error) {
+func (c *Cmd) parseLongFlag(args []string, index int, numberShortsMode bool, cfg *parseCfg) (int, error) {
 	arg := args[index]
 	flagName := arg[2:] // remove --
 
@@ -646,6 +646,9 @@ func (c *Cmd) parseLongFlag(args []string, index int, cfg *parseCfg) (int, error
 		if index+1 >= len(args) {
 			return 0, fmt.Errorf("flag --%s requires a value", flagName)
 		}
+		if err := c.checkFlagValue(args, args[index+1], "--"+flagName, false, numberShortsMode); err != nil {
+			return 0, err
+		}
 		err := c.setStringValue(f, args[index+1])
 		return 2, err
 	case *IntFlag:
@@ -655,6 +658,9 @@ func (c *Cmd) parseLongFlag(args []string, index int, cfg *parseCfg) (int, error
 		}
 		if index+1 >= len(args) {
 			return 0, fmt.Errorf("flag --%s requires a value", flagName)
+		}
+		if err := c.checkFlagValue(args, args[index+1], "--"+flagName, true, numberShortsMode); err != nil {
+			return 0, err
 		}
 		err := c.setIntValue(f, args[index+1])
 		return 2, err
@@ -666,6 +672,9 @@ func (c *Cmd) parseLongFlag(args []string, index int, cfg *parseCfg) (int, error
 		if index+1 >= len(args) {
 			return 0, fmt.Errorf("flag --%s requires a value", flagName)
 		}
+		if err := c.checkFlagValue(args, args[index+1], "--"+flagName, true, numberShortsMode); err != nil {
+			return 0, err
+		}
 		err := c.setInt64Value(f, args[index+1])
 		return 2, err
 	case *Float64Flag:
@@ -675,6 +684,9 @@ func (c *Cmd) parseLongFlag(args []string, index int, cfg *parseCfg) (int, error
 		}
 		if index+1 >= len(args) {
 			return 0, fmt.Errorf("flag --%s requires a value", flagName)
+		}
+		if err := c.checkFlagValue(args, args[index+1], "--"+flagName, true, numberShortsMode); err != nil {
+			return 0, err
 		}
 		err := c.setFloat64Value(f, args[index+1])
 		return 2, err
@@ -686,7 +698,7 @@ func (c *Cmd) parseLongFlag(args []string, index int, cfg *parseCfg) (int, error
 			}
 			return 1, err
 		}
-		consumed, err := c.parseSliceFlag(args, index, f, cfg)
+		consumed, err := c.parseSliceFlag(args, index, f, "--"+flagName, numberShortsMode, cfg)
 		if err == nil && f.Variadic {
 			c.lastVariadicFlag = flagName
 		}
@@ -696,25 +708,25 @@ func (c *Cmd) parseLongFlag(args []string, index int, cfg *parseCfg) (int, error
 			_, err := c.appendIntSliceValue(f, value)
 			return 1, err
 		}
-		return c.parseIntSliceFlag(args, index, f)
+		return c.parseIntSliceFlag(args, index, f, "--"+flagName, numberShortsMode)
 	case *Int64SliceFlag:
 		if hasValue {
 			_, err := c.appendInt64SliceValue(f, value)
 			return 1, err
 		}
-		return c.parseInt64SliceFlag(args, index, f)
+		return c.parseInt64SliceFlag(args, index, f, "--"+flagName, numberShortsMode)
 	case *Float64SliceFlag:
 		if hasValue {
 			_, err := c.appendFloat64SliceValue(f, value)
 			return 1, err
 		}
-		return c.parseFloat64SliceFlag(args, index, f)
+		return c.parseFloat64SliceFlag(args, index, f, "--"+flagName, numberShortsMode)
 	case *BoolSliceFlag:
 		if hasValue {
 			_, err := c.appendBoolSliceValue(f, value)
 			return 1, err
 		}
-		return c.parseBoolSliceFlag(args, index, f)
+		return c.parseBoolSliceFlag(args, index, f, "--"+flagName, numberShortsMode)
 	}
 
 	return 0, NewProgrammingError(fmt.Sprintf("unsupported flag type for: %s", flagName))
@@ -760,8 +772,10 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					err := c.setIntValue(f, value)
 					return 1, err
 				} else {
-					// Check if next argument exists and is a valid value (not a flag)
-					if index+1 < len(args) && !strings.HasPrefix(args[index+1], "-") {
+					// Check if next argument exists and is a valid value. A flag-shaped
+					// token isn't one, but a negative number is - "-c -5" means -5, the
+					// same as "--count -5".
+					if index+1 < len(args) && canBeCountedFlagValue(args[index+1], numberShortsMode) {
 						// Next arg is a value, try to parse it
 						err := c.setIntValue(f, args[index+1])
 						return 2, err
@@ -784,8 +798,10 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					err := c.setInt64Value(f, value)
 					return 1, err
 				} else {
-					// Check if next argument exists and is a valid value (not a flag)
-					if index+1 < len(args) && !strings.HasPrefix(args[index+1], "-") {
+					// Check if next argument exists and is a valid value. A flag-shaped
+					// token isn't one, but a negative number is - "-c -5" means -5, the
+					// same as "--count -5".
+					if index+1 < len(args) && canBeCountedFlagValue(args[index+1], numberShortsMode) {
 						// Next arg is a value, try to parse it
 						err := c.setInt64Value(f, args[index+1])
 						return 2, err
@@ -804,6 +820,9 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					// Use next argument
 					if index+1 >= len(args) {
 						return 0, fmt.Errorf("flag -%s requires a value", shorts)
+					}
+					if err := c.checkFlagValue(args, args[index+1], "-"+shorts, false, numberShortsMode); err != nil {
+						return 0, err
 					}
 					err := c.setStringValue(f, args[index+1])
 					return 2, err
@@ -945,6 +964,9 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					if index+1 >= len(args) {
 						return 0, fmt.Errorf("flag -%s requires a value", shortStr)
 					}
+					if err := c.checkFlagValue(args, args[index+1], "-"+shortStr, false, numberShortsMode); err != nil {
+						return 0, err
+					}
 					err := c.setStringValue(f, args[index+1])
 					if err != nil {
 						return 0, err
@@ -965,8 +987,10 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					}
 					consumed = 1
 				} else {
-					// Check if next argument exists and is a valid value (not a flag)
-					if index+1 < len(args) && !strings.HasPrefix(args[index+1], "-") {
+					// Check if next argument exists and is a valid value. A flag-shaped
+					// token isn't one, but a negative number is - "-c -5" means -5, the
+					// same as "--count -5".
+					if index+1 < len(args) && canBeCountedFlagValue(args[index+1], numberShortsMode) {
 						// Next arg is a value, try to parse it
 						err := c.setIntValue(f, args[index+1])
 						if err != nil {
@@ -997,7 +1021,7 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					consumed = 1
 				} else {
 					// Use parseSliceFlag for next argument(s)
-					consumed, err := c.parseSliceFlag(args, index, f, cfg)
+					consumed, err := c.parseSliceFlag(args, index, f, "-"+shortStr, numberShortsMode, cfg)
 					if err != nil {
 						return 0, err
 					}
@@ -1020,8 +1044,10 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					}
 					consumed = 1
 				} else {
-					// Check if next argument exists and is a valid value (not a flag)
-					if index+1 < len(args) && !strings.HasPrefix(args[index+1], "-") {
+					// Check if next argument exists and is a valid value. A flag-shaped
+					// token isn't one, but a negative number is - "-c -5" means -5, the
+					// same as "--count -5".
+					if index+1 < len(args) && canBeCountedFlagValue(args[index+1], numberShortsMode) {
 						// Next arg is a value, try to parse it
 						err := c.setInt64Value(f, args[index+1])
 						if err != nil {
@@ -1052,6 +1078,9 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					if index+1 >= len(args) {
 						return 0, fmt.Errorf("flag -%s requires a value", shortStr)
 					}
+					if err := c.checkFlagValue(args, args[index+1], "-"+shortStr, true, numberShortsMode); err != nil {
+						return 0, err
+					}
 					err := c.setFloat64Value(f, args[index+1])
 					if err != nil {
 						return 0, err
@@ -1073,7 +1102,7 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					consumed = 1
 				} else {
 					// Use parseIntSliceFlag for next argument(s)
-					consumed, err := c.parseIntSliceFlag(args, index, f)
+					consumed, err := c.parseIntSliceFlag(args, index, f, "-"+shortStr, numberShortsMode)
 					if err != nil {
 						return 0, err
 					}
@@ -1094,7 +1123,7 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					consumed = 1
 				} else {
 					// Use parseInt64SliceFlag for next argument(s)
-					consumed, err := c.parseInt64SliceFlag(args, index, f)
+					consumed, err := c.parseInt64SliceFlag(args, index, f, "-"+shortStr, numberShortsMode)
 					if err != nil {
 						return 0, err
 					}
@@ -1115,7 +1144,7 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					consumed = 1
 				} else {
 					// Use parseFloat64SliceFlag for next argument(s)
-					consumed, err := c.parseFloat64SliceFlag(args, index, f)
+					consumed, err := c.parseFloat64SliceFlag(args, index, f, "-"+shortStr, numberShortsMode)
 					if err != nil {
 						return 0, err
 					}
@@ -1136,7 +1165,7 @@ func (c *Cmd) parseShortFlag(args []string, index int, numberShortsMode bool, cf
 					consumed = 1
 				} else {
 					// Use parseBoolSliceFlag for next argument(s)
-					consumed, err := c.parseBoolSliceFlag(args, index, f)
+					consumed, err := c.parseBoolSliceFlag(args, index, f, "-"+shortStr, numberShortsMode)
 					if err != nil {
 						return 0, err
 					}
@@ -1501,11 +1530,21 @@ func (c *Cmd) parseBoolValue(value string) (bool, error) {
 	return val, nil
 }
 
-func (c *Cmd) parseSliceFlag(args []string, index int, f *StringSliceFlag, cfg *parseCfg) (int, error) {
+func (c *Cmd) parseSliceFlag(
+	args []string,
+	index int,
+	f *StringSliceFlag,
+	flagToken string,
+	numberShortsMode bool,
+	cfg *parseCfg,
+) (int, error) {
 	if !f.Variadic {
 		// Single value
 		if index+1 >= len(args) {
 			return 1, nil // Empty slice
+		}
+		if err := c.checkFlagValue(args, args[index+1], flagToken, false, numberShortsMode); err != nil {
+			return 0, err
 		}
 		return c.appendStringSliceValue(f, args[index+1])
 	}
@@ -1544,6 +1583,57 @@ func (c *Cmd) parseSliceFlag(args []string, index int, f *StringSliceFlag, cfg *
 // digit/dot test as parseShortFlag's negative-number detection.
 func isNegativeNumberToken(arg string) bool {
 	return len(arg) > 1 && (isDigit(arg[1]) || arg[1] == '.')
+}
+
+// isNegativeNumberValue reports whether a token should be read as a negative
+// number rather than a flag. Never in number-shorts mode, where a leading digit
+// is precisely what makes something a flag.
+func isNegativeNumberValue(arg string, numberShortsMode bool) bool {
+	return !numberShortsMode && isNegativeNumberToken(arg)
+}
+
+// canBeFlagValue reports whether a token may be consumed as the value of the
+// flag that precedes it. A "-"-prefixed token is a flag, not a value: taking it
+// silently turns a mistyped flag into data. Two exceptions - a bare "-" is the
+// stdin/stdout convention, and a number-typed flag can take a negative number.
+// Say you meant a flag-shaped value literally with the "=" form.
+func canBeFlagValue(arg string, numeric, numberShortsMode bool) bool {
+	if !strings.HasPrefix(arg, "-") || arg == "-" {
+		return true
+	}
+	return numeric && isNegativeNumberValue(arg, numberShortsMode)
+}
+
+// flagValueLooksLikeFlagErr builds the rejection for canBeFlagValue. flagToken
+// is the token the user actually typed ("--name", "-n"), not the flag's name: a
+// name-shadowed global is stored under its short key, so the flag name would
+// suggest an "=" form that resolves to a different flag.
+func flagValueLooksLikeFlagErr(flagToken, arg string) error {
+	return fmt.Errorf(
+		"flag %s requires a value, but %q looks like a flag; use %s=%s if you meant it as a value",
+		flagToken, arg, flagToken, arg,
+	)
+}
+
+// canBeCountedFlagValue is canBeFlagValue for the short int/int64 flags that
+// double as counters (-vvv). It drops the bare-"-" carve-out: "-c -" has always
+// meant "count of 1", and parsing "-" as an integer would only ever error.
+// These flags never reject - a flag-shaped token just falls back to counting.
+func canBeCountedFlagValue(arg string, numberShortsMode bool) bool {
+	return !strings.HasPrefix(arg, "-") || isNegativeNumberValue(arg, numberShortsMode)
+}
+
+// checkFlagValue guards a token about to be consumed as flagToken's value.
+// Help keeps winning over the rejection: "--name --help" has always shown help
+// rather than complaining about --name, and users rely on it.
+func (c *Cmd) checkFlagValue(args []string, arg, flagToken string, numeric, numberShortsMode bool) error {
+	if canBeFlagValue(arg, numeric, numberShortsMode) {
+		return nil
+	}
+	if c.helpEnabled && c.hasHelpFlags(args) {
+		return c.createHelpError(args)
+	}
+	return flagValueLooksLikeFlagErr(flagToken, arg)
 }
 
 // wouldParseAsFlag reports whether parseFlag would resolve the "-"-prefixed
@@ -1616,11 +1706,20 @@ func (c *Cmd) appendStringSliceValue(f *StringSliceFlag, value string) (int, err
 	return 2, nil
 }
 
-func (c *Cmd) parseIntSliceFlag(args []string, index int, f *IntSliceFlag) (int, error) {
+func (c *Cmd) parseIntSliceFlag(
+	args []string,
+	index int,
+	f *IntSliceFlag,
+	flagToken string,
+	numberShortsMode bool,
+) (int, error) {
 	if !f.Variadic {
 		// Single value
 		if index+1 >= len(args) {
 			return 1, nil // Empty slice
+		}
+		if err := c.checkFlagValue(args, args[index+1], flagToken, true, numberShortsMode); err != nil {
+			return 0, err
 		}
 		return c.appendIntSliceValue(f, args[index+1])
 	}
@@ -1628,10 +1727,9 @@ func (c *Cmd) parseIntSliceFlag(args []string, index int, f *IntSliceFlag) (int,
 	// Variadic - consume until next flag. Negative numbers are values, not
 	// flags (parseFlag treats them as positionals outside number-shorts mode),
 	// so greedy collection must consume them too.
-	numberShortsMode := c.hasNumberShorts()
 	consumed := 1
 	for i := index + 1; i < len(args); i++ {
-		if strings.HasPrefix(args[i], "-") && (numberShortsMode || !isNegativeNumberToken(args[i])) {
+		if strings.HasPrefix(args[i], "-") && !isNegativeNumberValue(args[i], numberShortsMode) {
 			break
 		}
 		if _, err := c.appendIntSliceValue(f, args[i]); err != nil {
@@ -1687,21 +1785,29 @@ func (c *Cmd) appendIntSliceValue(f *IntSliceFlag, value string) (int, error) {
 	return 2, nil
 }
 
-func (c *Cmd) parseInt64SliceFlag(args []string, index int, f *Int64SliceFlag) (int, error) {
+func (c *Cmd) parseInt64SliceFlag(
+	args []string,
+	index int,
+	f *Int64SliceFlag,
+	flagToken string,
+	numberShortsMode bool,
+) (int, error) {
 	if !f.Variadic {
 		// Single value
 		if index+1 >= len(args) {
 			return 1, nil // Empty slice
+		}
+		if err := c.checkFlagValue(args, args[index+1], flagToken, true, numberShortsMode); err != nil {
+			return 0, err
 		}
 		return c.appendInt64SliceValue(f, args[index+1])
 	}
 
 	// Variadic - consume until next flag; negative numbers are values (see
 	// parseIntSliceFlag).
-	numberShortsMode := c.hasNumberShorts()
 	consumed := 1
 	for i := index + 1; i < len(args); i++ {
-		if strings.HasPrefix(args[i], "-") && (numberShortsMode || !isNegativeNumberToken(args[i])) {
+		if strings.HasPrefix(args[i], "-") && !isNegativeNumberValue(args[i], numberShortsMode) {
 			break
 		}
 		if _, err := c.appendInt64SliceValue(f, args[i]); err != nil {
@@ -1757,21 +1863,29 @@ func (c *Cmd) appendInt64SliceValue(f *Int64SliceFlag, value string) (int, error
 	return 2, nil
 }
 
-func (c *Cmd) parseFloat64SliceFlag(args []string, index int, f *Float64SliceFlag) (int, error) {
+func (c *Cmd) parseFloat64SliceFlag(
+	args []string,
+	index int,
+	f *Float64SliceFlag,
+	flagToken string,
+	numberShortsMode bool,
+) (int, error) {
 	if !f.Variadic {
 		// Single value
 		if index+1 >= len(args) {
 			return 1, nil // Empty slice
+		}
+		if err := c.checkFlagValue(args, args[index+1], flagToken, true, numberShortsMode); err != nil {
+			return 0, err
 		}
 		return c.appendFloat64SliceValue(f, args[index+1])
 	}
 
 	// Variadic - consume until next flag; negative numbers are values (see
 	// parseIntSliceFlag).
-	numberShortsMode := c.hasNumberShorts()
 	consumed := 1
 	for i := index + 1; i < len(args); i++ {
-		if strings.HasPrefix(args[i], "-") && (numberShortsMode || !isNegativeNumberToken(args[i])) {
+		if strings.HasPrefix(args[i], "-") && !isNegativeNumberValue(args[i], numberShortsMode) {
 			break
 		}
 		if _, err := c.appendFloat64SliceValue(f, args[i]); err != nil {
@@ -1827,11 +1941,20 @@ func (c *Cmd) appendFloat64SliceValue(f *Float64SliceFlag, value string) (int, e
 	return 2, nil
 }
 
-func (c *Cmd) parseBoolSliceFlag(args []string, index int, f *BoolSliceFlag) (int, error) {
+func (c *Cmd) parseBoolSliceFlag(
+	args []string,
+	index int,
+	f *BoolSliceFlag,
+	flagToken string,
+	numberShortsMode bool,
+) (int, error) {
 	if !f.Variadic {
 		// Single value
 		if index+1 >= len(args) {
 			return 1, nil // Empty slice
+		}
+		if err := c.checkFlagValue(args, args[index+1], flagToken, false, numberShortsMode); err != nil {
+			return 0, err
 		}
 		return c.appendBoolSliceValue(f, args[index+1])
 	}

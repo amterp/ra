@@ -5051,3 +5051,244 @@ func Test_TooManyPositionals_BeforeSubcommandStillError(t *testing.T) {
 	assert.Equal(t, "a", *first)
 	_ = subArg
 }
+
+// ===========================================
+// FLAG-LIKE TOKENS IN VALUE POSITION
+// ===========================================
+
+func Test_DashValue_LongStringFlagRejectsKnownFlag(t *testing.T) {
+	// A mistyped or forgotten value used to become data: --name --verbose set
+	// name="--verbose" and left verbose false.
+	fs := NewCmd("test")
+
+	name, _ := NewString("name").Register(fs)
+	verbose, _ := NewBool("verbose").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"--name", "--verbose"})
+	assert.Equal(
+		t,
+		`flag --name requires a value, but "--verbose" looks like a flag; use --name=--verbose if you meant it as a value`,
+		parseErr.Error(),
+	)
+	assert.Equal(t, "", *name)
+	assert.False(t, *verbose)
+}
+
+func Test_DashValue_LongStringFlagRejectsUnknownFlag(t *testing.T) {
+	// The guard is shape-based, not resolution-based: a typo'd flag is exactly
+	// the case worth catching, and it resolves to nothing.
+	fs := NewCmd("test")
+
+	name, _ := NewString("name").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"--name", "--tpyo"})
+	assert.Equal(
+		t,
+		`flag --name requires a value, but "--tpyo" looks like a flag; use --name=--tpyo if you meant it as a value`,
+		parseErr.Error(),
+	)
+	assert.Equal(t, "", *name)
+}
+
+func Test_DashValue_StringFlagRejectsNegativeNumber(t *testing.T) {
+	// The negative-number carve-out is type-aware: -5 is only a value for a
+	// number-typed flag. For a string flag it reads as a flag like any other.
+	fs := NewCmd("test")
+
+	name, _ := NewString("name").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"--name", "-5"})
+	assert.Equal(
+		t,
+		`flag --name requires a value, but "-5" looks like a flag; use --name=-5 if you meant it as a value`,
+		parseErr.Error(),
+	)
+
+	fs2 := NewCmd("test")
+	name2, _ := NewString("name").Register(fs2)
+	assert.Nil(t, fs2.ParseOrError([]string{"--name=-5"}))
+	assert.Equal(t, "-5", *name2)
+	_ = name
+}
+
+func Test_DashValue_NumberFlagsStillAcceptNegativeValues(t *testing.T) {
+	fs := NewCmd("test")
+
+	count, _ := NewInt("count").Register(fs)
+	big, _ := NewInt64("big").Register(fs)
+	rate, _ := NewFloat64("rate").Register(fs)
+
+	assert.Nil(t, fs.ParseOrError([]string{"--count", "-5", "--big", "-6", "--rate", "-7.5"}))
+	assert.Equal(t, -5, *count)
+	assert.Equal(t, int64(-6), *big)
+	assert.Equal(t, -7.5, *rate)
+}
+
+func Test_DashValue_NumberFlagStillRejectsRealFlag(t *testing.T) {
+	fs := NewCmd("test")
+
+	count, _ := NewInt("count").Register(fs)
+	NewBool("verbose").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"--count", "--verbose"})
+	assert.Equal(
+		t,
+		`flag --count requires a value, but "--verbose" looks like a flag; use --count=--verbose if you meant it as a value`,
+		parseErr.Error(),
+	)
+	assert.Equal(t, 0, *count)
+}
+
+func Test_DashValue_BareDashIsAValue(t *testing.T) {
+	// "-" is the stdin/stdout convention, not a flag.
+	fs := NewCmd("test")
+
+	name, _ := NewString("name").Register(fs)
+	filter, _ := NewStringSlice("filter").Register(fs)
+
+	assert.Nil(t, fs.ParseOrError([]string{"--name", "-", "--filter", "-"}))
+	assert.Equal(t, "-", *name)
+	assert.Equal(t, []string{"-"}, *filter)
+}
+
+func Test_DashValue_DoubleDashRejected(t *testing.T) {
+	// "--" ends flag parsing; consuming it as a value would silently eat the
+	// marker and shift everything after it.
+	fs := NewCmd("test")
+
+	name, _ := NewString("name").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"--name", "--"})
+	assert.Equal(
+		t,
+		`flag --name requires a value, but "--" looks like a flag; use --name=-- if you meant it as a value`,
+		parseErr.Error(),
+	)
+	assert.Equal(t, "", *name)
+}
+
+func Test_DashValue_NumberShortsModeRejectsNegativeNumbers(t *testing.T) {
+	// In number-shorts mode -5 really is a flag, so the carve-out is off and
+	// the = form becomes mandatory - as EXAMPLES.md has always claimed.
+	fs := NewCmd("test")
+
+	count, _ := NewInt("count").Register(fs)
+	NewInt("two").SetShort("2").SetDefault(0).Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"--count", "-5"})
+	assert.Equal(
+		t,
+		`flag --count requires a value, but "-5" looks like a flag; use --count=-5 if you meant it as a value`,
+		parseErr.Error(),
+	)
+
+	fs2 := NewCmd("test")
+	count2, _ := NewInt("count").Register(fs2)
+	NewInt("two").SetShort("2").SetDefault(0).Register(fs2)
+	assert.Nil(t, fs2.ParseOrError([]string{"--count=-5"}))
+	assert.Equal(t, -5, *count2)
+	_ = count
+}
+
+func Test_DashValue_NumberShortsModeStringShortRejectsDashValue(t *testing.T) {
+	fs := NewCmd("test")
+
+	name, _ := NewString("name").SetShort("2").Register(fs)
+	NewBool("verbose").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"-2", "--verbose"})
+	assert.Equal(
+		t,
+		`flag -2 requires a value, but "--verbose" looks like a flag; use -2=--verbose if you meant it as a value`,
+		parseErr.Error(),
+	)
+	assert.Equal(t, "", *name)
+}
+
+func Test_DashValue_ClusterShortStringRejectsDashValue(t *testing.T) {
+	fs := NewCmd("test")
+
+	all, _ := NewBool("all").SetShort("a").Register(fs)
+	name, _ := NewString("name").SetShort("b").Register(fs)
+	NewBool("verbose").SetShort("v").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"-ab", "-v"})
+	assert.Equal(
+		t,
+		`flag -b requires a value, but "-v" looks like a flag; use -b=-v if you meant it as a value`,
+		parseErr.Error(),
+	)
+	assert.True(t, *all)
+	assert.Equal(t, "", *name)
+}
+
+func Test_DashValue_ShortIntCountFallbackStillCounts(t *testing.T) {
+	// The -vvv style counting fallback must survive: a real flag after a short
+	// int flag still means "count of 1", not an error.
+	fs := NewCmd("test")
+
+	count, _ := NewInt("count").SetShort("c").SetDefault(0).Register(fs)
+	verbose, _ := NewBool("verbose").SetShort("v").Register(fs)
+
+	assert.Nil(t, fs.ParseOrError([]string{"-c", "-v"}))
+	assert.Equal(t, 1, *count)
+	assert.True(t, *verbose)
+}
+
+func Test_DashValue_ShortNumberFlagTakesNegativeValue(t *testing.T) {
+	// Previously the count fallback swallowed this: -c -5 set count=1 and let
+	// -5 spill into positionals. Now it matches --count -5.
+	fs := NewCmd("test")
+
+	count, _ := NewInt("count").SetShort("c").SetDefault(0).Register(fs)
+	big, _ := NewInt64("big").SetShort("n").SetDefault(int64(0)).Register(fs)
+
+	assert.Nil(t, fs.ParseOrError([]string{"-c", "-5", "-n", "-6"}))
+	assert.Equal(t, -5, *count)
+	assert.Equal(t, int64(-6), *big)
+}
+
+func Test_DashValue_SliceFlagsRejectDashValue(t *testing.T) {
+	fs := NewCmd("test")
+
+	filter, _ := NewStringSlice("filter").SetShort("c").Register(fs)
+	NewBool("verbose").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"-c", "--tpyo"})
+	assert.Equal(
+		t,
+		`flag -c requires a value, but "--tpyo" looks like a flag; use -c=--tpyo if you meant it as a value`,
+		parseErr.Error(),
+	)
+	assert.Equal(t, []string{}, *filter)
+
+	fs2 := NewCmd("test")
+	flags2, _ := NewBoolSlice("flags").Register(fs2)
+	NewBool("verbose").Register(fs2)
+	parseErr2 := fs2.ParseOrError([]string{"--flags", "--verbose"})
+	assert.Equal(
+		t,
+		`flag --flags requires a value, but "--verbose" looks like a flag; use --flags=--verbose if you meant it as a value`,
+		parseErr2.Error(),
+	)
+	assert.Equal(t, []bool{}, *flags2)
+}
+
+func Test_DashValue_NonVariadicNumberSliceAcceptsNegativeValue(t *testing.T) {
+	fs := NewCmd("test")
+
+	nums, _ := NewIntSlice("nums").Register(fs)
+
+	assert.Nil(t, fs.ParseOrError([]string{"--nums", "-5"}))
+	assert.Equal(t, []int{-5}, *nums)
+}
+
+func Test_DashValue_HelpStillWins(t *testing.T) {
+	// Help has always taken precedence over a flag's value position, and the
+	// new rejection must not return before the help scan gets its chance.
+	fs := NewCmd("test")
+
+	NewString("name").Register(fs)
+
+	assert.Equal(t, HelpInvokedErr, fs.ParseOrError([]string{"--name", "--help"}))
+}

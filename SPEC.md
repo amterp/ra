@@ -120,12 +120,22 @@ Parsing behavior can be customized using functional options (`ParseOpt`):
 - Named flags override positional values.
 - Later occurrences override earlier ones.
 
+### Flag Values
+
+- A `-`-prefixed token is a flag, not a value. `--name --verbose` is an error, not `name = "--verbose"` - a mistyped flag must not become data.
+- To pass a flag-shaped token as a value, use `--name=--verbose`, or place it after `--`.
+- A bare `-` is a value (the stdin/stdout convention).
+- Number-typed flags accept negative numbers: `--count -5`. String and bool flags do not - `--name -5` is an error, `--name=-5` is not.
+- The negative-number exception is off in Number Shorts Mode, where `-5` is a flag.
+- Short int flags that double as counters (`-vvv`) still fall back to counting when a flag follows them: `-c -v` means a count of 1. `-c -5` means -5.
+- Help wins over the rejection: `--name --help` shows usage.
+
 ### Number Shorts Mode
 
 - Activated when any IntFlag has a short name.
 - Applies per-command (including inherited global flags).
 - In this mode, standalone negative numbers are treated as short flags.
-- To pass negative integers, use `--flag=-5` syntax.
+- To pass negative integers, use `--flag=-5` syntax. `--flag -5` is an error.
 
 ### Slice Flag Parsing
 
@@ -228,6 +238,7 @@ These are mistakes in command-line input by end users. They show **error message
 
 - Unknown flag
 - Missing required flag value
+- Flag-shaped token in a value position
 - Type conversion errors
 - Constraint violations (enum, regex, min/max)
 - Missing required arguments

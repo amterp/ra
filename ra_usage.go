@@ -749,6 +749,10 @@ func (c *Cmd) getConstraintString(flag any) string {
 		parts = append(parts, "Regex: "+regexStr)
 	}
 
+	if lenStr := c.getLenString(flag); lenStr != "" {
+		parts = append(parts, "Length: "+lenStr)
+	}
+
 	// Add separator for slices
 	if sepStr := c.getSeparatorString(flag); sepStr != "" {
 		parts = append(parts, "Separator: "+sepStr)
@@ -926,6 +930,12 @@ func (c *Cmd) getRangeString(flag any) string {
 
 			return left + ", " + right
 		}
+	case *SliceFlag[int]:
+		return f.rangeString()
+	case *SliceFlag[int64]:
+		return f.rangeString()
+	case *SliceFlag[float64]:
+		return f.rangeString()
 	}
 	return ""
 }
@@ -933,6 +943,10 @@ func (c *Cmd) getRangeString(flag any) string {
 func (c *Cmd) getEnumString(flag any) string {
 	switch f := flag.(type) {
 	case *StringFlag:
+		if f.EnumConstraint != nil && len(*f.EnumConstraint) > 0 {
+			return fmt.Sprintf("[%s]", strings.Join(*f.EnumConstraint, ", "))
+		}
+	case *SliceFlag[string]:
 		if f.EnumConstraint != nil && len(*f.EnumConstraint) > 0 {
 			return fmt.Sprintf("[%s]", strings.Join(*f.EnumConstraint, ", "))
 		}
@@ -946,6 +960,28 @@ func (c *Cmd) getRegexString(flag any) string {
 		if f.RegexConstraint != nil {
 			return f.RegexConstraint.String()
 		}
+	case *SliceFlag[string]:
+		if f.RegexConstraint != nil {
+			return f.RegexConstraint.String()
+		}
+	}
+	return ""
+}
+
+// getLenString renders a slice flag's element-count bounds. Scalars have no
+// equivalent, so there are no cases for them.
+func (c *Cmd) getLenString(flag any) string {
+	switch f := flag.(type) {
+	case *SliceFlag[string]:
+		return f.lenString()
+	case *SliceFlag[int]:
+		return f.lenString()
+	case *SliceFlag[int64]:
+		return f.lenString()
+	case *SliceFlag[float64]:
+		return f.lenString()
+	case *SliceFlag[bool]:
+		return f.lenString()
 	}
 	return ""
 }

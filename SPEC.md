@@ -85,10 +85,13 @@ cmd.ParseOrError([]string{})
 - **RegexConstraint** (string): Restricts value to match a regex pattern.
 - **Min/Max** (numeric): Restricts value to a minimum or maximum.
 
+On a slice flag these apply to **each element**, and are checked wherever the element arrives from - a repeated flag, a separated token, or greedy positional collection. A constraint the element type cannot support is rejected by `Register` rather than ignored: enum and regex need string elements, min/max need numeric ones.
+
 ### Slice Flag Options
 
 - **Separator**: Character to split a single argument into multiple values.
 - **Variadic**: Consume multiple consecutive arguments after the flag's own token, until the next flag. This is about the flag form only - every positional-capable slice flag collects bare positional values greedily, variadic or not.
+- **MinLen/MaxLen**: Restricts how many elements the flag accepts, as opposed to what each one may be. Valid for every element type, including bools. Checked once parsing has finished, after the required-argument pass, so an absent flag reports as missing rather than as too short. Only a flag the user actually set is checked - an untouched default is the author's own choice.
 
 ## Argument Parsing
 

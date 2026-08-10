@@ -155,6 +155,8 @@ Arguments:
 
 **Slice Constraints:**
 - `Separator: ","` (if custom separator specified)
+- `Length: [min, max]` - how many elements the flag accepts. Same interval notation as `Range`, and the same open/mixed forms: `Length: [1, )`, `Length: [3, 5)`
+- Range, enum and regex render on a slice exactly as they do on a scalar - they describe each element, not the slice. A slice can show both, e.g. `Range: [0, 100]. Length: [1, )`
 
 **Slice Flags:**
 - All variadic flags are inherently optional (default to empty slices)

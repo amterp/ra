@@ -1737,11 +1737,19 @@ func (c *Cmd) appendStringSliceValue(f *StringSliceFlag, value string) (int, err
 			*f.Value = make([]string, 0, len(parts))
 		}
 		for _, part := range parts {
+			// Each part, not the raw token: with a separator one argv entry
+			// carries several elements, and the constraint is per element.
+			if err := f.checkStringElement(part); err != nil {
+				return 0, err
+			}
 			*f.Value = append(*f.Value, part)
 		}
 	} else {
 		if shouldReplace {
 			*f.Value = make([]string, 0, 1)
+		}
+		if err := f.checkStringElement(value); err != nil {
+			return 0, err
 		}
 		*f.Value = append(*f.Value, value)
 	}
@@ -1812,6 +1820,9 @@ func (c *Cmd) appendIntSliceValue(f *IntSliceFlag, value string) (int, error) {
 			if err != nil {
 				return 0, fmt.Errorf("invalid integer value for %s: %s", f.Name, part)
 			}
+			if err := f.checkNumberElement(float64(val), part); err != nil {
+				return 0, err
+			}
 			*f.Value = append(*f.Value, val)
 		}
 	} else {
@@ -1821,6 +1832,9 @@ func (c *Cmd) appendIntSliceValue(f *IntSliceFlag, value string) (int, error) {
 		val, err := strconv.Atoi(value)
 		if err != nil {
 			return 0, fmt.Errorf("invalid integer value for %s: %s", f.Name, value)
+		}
+		if err := f.checkNumberElement(float64(val), value); err != nil {
+			return 0, err
 		}
 		*f.Value = append(*f.Value, val)
 	}
@@ -1890,6 +1904,9 @@ func (c *Cmd) appendInt64SliceValue(f *Int64SliceFlag, value string) (int, error
 			if err != nil {
 				return 0, fmt.Errorf("invalid int64 value for %s: %s", f.Name, part)
 			}
+			if err := f.checkNumberElement(float64(val), part); err != nil {
+				return 0, err
+			}
 			*f.Value = append(*f.Value, val)
 		}
 	} else {
@@ -1899,6 +1916,9 @@ func (c *Cmd) appendInt64SliceValue(f *Int64SliceFlag, value string) (int, error
 		val, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return 0, fmt.Errorf("invalid int64 value for %s: %s", f.Name, value)
+		}
+		if err := f.checkNumberElement(float64(val), value); err != nil {
+			return 0, err
 		}
 		*f.Value = append(*f.Value, val)
 	}
@@ -1968,6 +1988,9 @@ func (c *Cmd) appendFloat64SliceValue(f *Float64SliceFlag, value string) (int, e
 			if err != nil {
 				return 0, fmt.Errorf("invalid float64 value for %s: %s", f.Name, part)
 			}
+			if err := f.checkNumberElement(val, part); err != nil {
+				return 0, err
+			}
 			*f.Value = append(*f.Value, val)
 		}
 	} else {
@@ -1977,6 +2000,9 @@ func (c *Cmd) appendFloat64SliceValue(f *Float64SliceFlag, value string) (int, e
 		val, err := strconv.ParseFloat(value, 64)
 		if err != nil {
 			return 0, fmt.Errorf("invalid float64 value for %s: %s", f.Name, value)
+		}
+		if err := f.checkNumberElement(val, value); err != nil {
+			return 0, err
 		}
 		*f.Value = append(*f.Value, val)
 	}
@@ -2251,6 +2277,42 @@ func (c *Cmd) validateRequired() error {
 
 	if len(missingRequired) > 0 {
 		return fmt.Errorf("Missing required arguments: [%s]", strings.Join(missingRequired, ", "))
+	}
+
+	// Third pass: how many values each list arg got. Last, so that "you did not
+	// provide it" beats "you provided too few of it".
+	return c.validateLengths()
+}
+
+// validateLengths checks the element-count constraints on slice flags. Only
+// flags the user actually set are checked: an untouched default is the author's
+// own choice, and an absent required flag has already been reported above.
+func (c *Cmd) validateLengths() error {
+	for _, name := range c.getAllFlagsInRegistrationOrder() {
+		if !c.configured[name] {
+			continue
+		}
+		flag, exists := c.flags[name]
+		if !exists {
+			continue
+		}
+
+		var err error
+		switch f := flag.(type) {
+		case *SliceFlag[string]:
+			err = f.checkLength()
+		case *SliceFlag[int]:
+			err = f.checkLength()
+		case *SliceFlag[int64]:
+			err = f.checkLength()
+		case *SliceFlag[float64]:
+			err = f.checkLength()
+		case *SliceFlag[bool]:
+			err = f.checkLength()
+		}
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

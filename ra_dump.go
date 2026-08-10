@@ -462,7 +462,7 @@ func (c *Cmd) getFlagTypeForDump(flag any) string {
 		}
 		return result
 	case *StringSliceFlag:
-		result := "[]string"
+		result := "[]string" + f.dumpConstraints()
 		if f.Variadic {
 			result += "(variadic)"
 		}
@@ -471,7 +471,7 @@ func (c *Cmd) getFlagTypeForDump(flag any) string {
 		}
 		return result
 	case *IntSliceFlag:
-		result := "[]int"
+		result := "[]int" + f.dumpConstraints()
 		if f.Variadic {
 			result += "(variadic)"
 		}
@@ -480,7 +480,7 @@ func (c *Cmd) getFlagTypeForDump(flag any) string {
 		}
 		return result
 	case *Int64SliceFlag:
-		result := "[]int64"
+		result := "[]int64" + f.dumpConstraints()
 		if f.Variadic {
 			result += "(variadic)"
 		}
@@ -489,7 +489,7 @@ func (c *Cmd) getFlagTypeForDump(flag any) string {
 		}
 		return result
 	case *Float64SliceFlag:
-		result := "[]float64"
+		result := "[]float64" + f.dumpConstraints()
 		if f.Variadic {
 			result += "(variadic)"
 		}
@@ -498,7 +498,7 @@ func (c *Cmd) getFlagTypeForDump(flag any) string {
 		}
 		return result
 	case *BoolSliceFlag:
-		result := "[]bool"
+		result := "[]bool" + f.dumpConstraints()
 		if f.Variadic {
 			result += "(variadic)"
 		}

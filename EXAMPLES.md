@@ -388,3 +388,41 @@ Commands:
   add    Add a reminder. (default)
   list   Show upcoming reminders.
 ```
+
+---
+
+## Constraints on a list
+
+A constraint on a list flag describes each element, not the list. It is checked
+wherever the element comes from, so all three of these routes reject the same
+value:
+
+```go
+scores, _ := ra.NewIntSlice("scores").SetMin(0, true).SetMax(100, true).Register(cmd)
+envs, _ := ra.NewStringSlice("envs").
+	SetSeparator(",").
+	SetEnumConstraint([]string{"dev", "stg", "prd"}).
+	Register(cmd)
+```
+
+```sh
+mycmd --scores 5 --scores 500   # 'scores' value 500 is > maximum 100
+mycmd 5 500                     # same, collected positionally
+mycmd --envs dev,nope           # Invalid 'envs' value: nope (valid values: dev, stg, prd)
+```
+
+`SetMinLen` / `SetMaxLen` bound the count instead, and can sit alongside an
+element constraint:
+
+```go
+pair, _ := ra.NewStringSlice("pair").SetMinLen(2, true).SetMaxLen(2, true).Register(cmd)
+```
+
+```sh
+mycmd --pair a           # 'pair' takes at least 2 values, got 1
+mycmd --pair a --pair b  # ok
+```
+
+A constraint the element type cannot support is an error at `Register`, not a
+silent no-op - `SetEnumConstraint` on an int list fails to register rather than
+accepting values it never checks.

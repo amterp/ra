@@ -332,6 +332,13 @@ func (c *Cmd) separateScriptAndGlobalFlags() (scriptFlags, globalFlags []any) {
 }
 
 func (c *Cmd) generateArgumentsSection(isLongHelp bool) string {
+	return c.generateArgumentsSectionAs(c.getUsageHeaders().Arguments, isLongHelp)
+}
+
+// generateArgumentsSectionAs renders this command's args under a caller-chosen
+// header, so a parent can show its default subcommand's args without claiming
+// they are its own.
+func (c *Cmd) generateArgumentsSectionAs(header string, isLongHelp bool) string {
 	scriptFlags, _ := c.separateScriptAndGlobalFlags()
 
 	if len(scriptFlags) == 0 || !c.hasVisibleFlags(scriptFlags, isLongHelp) {
@@ -339,9 +346,8 @@ func (c *Cmd) generateArgumentsSection(isLongHelp bool) string {
 	}
 
 	var sb strings.Builder
-	headers := c.getUsageHeaders()
 
-	sb.WriteString("\n" + GreenBoldS(headers.Arguments) + "\n")
+	sb.WriteString("\n" + GreenBoldS(header) + "\n")
 	sb.WriteString(c.formatFlags(scriptFlags, isLongHelp))
 
 	return sb.String()
@@ -376,6 +382,17 @@ func (c *Cmd) generateUsage(isLongHelp bool) string {
 	sb.WriteString(c.generateSynopsis(isLongHelp))
 	sb.WriteString("\n")
 
+	// A second synopsis line for the default subcommand, naming its equivalent.
+	// The `(default)` tag in the command list says which command it is; this
+	// says what you can actually type. Skipped when the default takes no
+	// positionals, since the line would otherwise repeat the first one.
+	if def := c.defaultCmd(); def != nil && def.hasPositionalArgs(isLongHelp) {
+		sb.WriteString("  ")
+		sb.WriteString(def.generateSynopsisAs(c.name, isLongHelp))
+		sb.WriteString(CyanS("   (same as: %s %s)", c.name, def.name))
+		sb.WriteString("\n")
+	}
+
 	commandsSection := c.generateCommandsSection(isLongHelp)
 	if commandsSection != "" {
 		sb.WriteString(commandsSection)
@@ -384,6 +401,15 @@ func (c *Cmd) generateUsage(isLongHelp bool) string {
 	argumentsSection := c.generateArgumentsSection(isLongHelp)
 	if argumentsSection != "" {
 		sb.WriteString(argumentsSection)
+	}
+
+	// The default's own args, after this command's, because the page is about
+	// this command and those are borrowed.
+	if def := c.defaultCmd(); def != nil {
+		if section := def.generateArgumentsSectionAs(
+			fmt.Sprintf("Args for default command '%s':", def.name), isLongHelp); section != "" {
+			sb.WriteString(section)
+		}
 	}
 
 	globalOptionsSection := c.generateGlobalOptionsSection(isLongHelp)
@@ -413,8 +439,15 @@ func (c *Cmd) writeSynopsisArg(sb *strings.Builder, name string, flag any) bool 
 }
 
 func (c *Cmd) generateSynopsis(isLongHelp bool) string {
+	return c.generateSynopsisAs(c.name, isLongHelp)
+}
+
+// generateSynopsisAs renders this command's synopsis under a different leading
+// name. The default-subcommand line needs it: the args are the default's, but
+// the invocation the reader types is the parent's.
+func (c *Cmd) generateSynopsisAs(name string, isLongHelp bool) string {
 	var sb strings.Builder
-	sb.WriteString(BoldS(c.name))
+	sb.WriteString(BoldS(name))
 
 	// Prepend the [subcommand] placeholder when subcommands are visible at this
 	// help level (none visible - because none exist or all are hidden - means no
@@ -1017,6 +1050,19 @@ func (c *Cmd) flagHasDefault(flag any) bool {
 		return f.Default != nil
 	case *BoolSliceFlag:
 		return true // Boolean slice flags have implicit default of empty slice
+	}
+	return false
+}
+
+// hasPositionalArgs reports whether this command takes any visible positional
+// argument, which is what decides whether a default-subcommand synopsis line
+// would say anything the first line didn't.
+func (c *Cmd) hasPositionalArgs(isLongHelp bool) bool {
+	for _, name := range c.positional {
+		flag := c.flags[name]
+		if base := getBaseFlag(flag); base != nil && !base.FlagOnly && base.isVisible(isLongHelp) {
+			return true
+		}
 	}
 	return false
 }

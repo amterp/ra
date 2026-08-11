@@ -699,8 +699,11 @@ func getFlagType(flag any) string {
 		return "str"
 	case *IntFlag:
 		return "int"
+	// int64 is a Go-side width, not something a caller types differently: the
+	// placeholder tells them what to write, and that is digits either way.
+	// A caller who does want the distinction can set a custom usage type.
 	case *Int64Flag:
-		return "int64"
+		return "int"
 	case *Float64Flag:
 		return "float"
 	case *BoolSliceFlag:
@@ -720,9 +723,9 @@ func getFlagType(flag any) string {
 		return "ints"
 	case *Int64SliceFlag:
 		if f.Variadic {
-			return "[int64s...]"
+			return "[ints...]"
 		}
-		return "int64s"
+		return "ints"
 	case *Float64SliceFlag:
 		if f.Variadic {
 			return "[floats...]"

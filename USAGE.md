@@ -128,7 +128,7 @@ Arguments:
 - **BoolFlag**: No type shown (just the flag)
 - **StringFlag**: `str`  
 - **IntFlag**: `int`
-- **Int64Flag**: `int64`
+- **Int64Flag**: `int` (same as `IntFlag` - the width is a Go-side detail, and a caller types digits either way; set a custom usage type to distinguish them)
 - **Float64Flag**: `float`
 - **SliceFlag[T]**: `T` for single values, `T...` for variadic (e.g., `strs`, `strs...`). This column describes the *flag* form, which is why a non-variadic list stays `strs` even though it collects positionals greedily.
 

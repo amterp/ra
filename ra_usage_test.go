@@ -1417,7 +1417,7 @@ Usage:
 
 Arguments:
       --stringArg str         (default alice)
-      --intArg int64          An int. (default 1)
+      --intArg int            An int. (default 1)
       --floatArg float        (default 1.1)
       --stringListArg strs    (default [bob, charlie])
       --intListArg ints       (default [2, 3])

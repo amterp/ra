@@ -24,7 +24,8 @@ if release:
     pushup()
     $`git tag -l | tail`
     version = get_version()
-    $`gh release create {version} --generate-notes --title "Release {version}"`
+    title = "Release {version}"
+    $`gh release create {version} --generate-notes --title {title}`
     $`git fetch origin --tags`
 
 if push or force_push:
@@ -37,7 +38,7 @@ fn pushup():
     $`git push origin {branch} --tags`
 
 fn get_branch():
-    _, branch  = $`echo -n $(git branch --show-current)`
+    branch = $`echo -n $(git branch --show-current)`
     return branch.trim()
 
 fn get_version() -> str:

@@ -1581,9 +1581,13 @@ func (c *Cmd) parseSliceFlag(
 	cfg *parseCfg,
 ) (int, error) {
 	if !f.Variadic {
-		// Single value
+		// Single value. A non-variadic list is required unless it has a
+		// default, so accepting a bare flag as an empty slice let it
+		// satisfy that requirement with nothing - and where a default
+		// existed, did nothing at all. Variadic flags are inherently
+		// optional and keep collecting zero values happily.
 		if index+1 >= len(args) {
-			return 1, nil // Empty slice
+			return 0, fmt.Errorf("flag %s requires a value", flagToken)
 		}
 		if err := c.checkFlagValue(args, args[index+1], flagToken, false, numberShortsMode); err != nil {
 			return 0, err
@@ -1764,9 +1768,9 @@ func (c *Cmd) parseIntSliceFlag(
 	numberShortsMode bool,
 ) (int, error) {
 	if !f.Variadic {
-		// Single value
+		// Single value (see parseSliceFlag on why a bare flag errors).
 		if index+1 >= len(args) {
-			return 1, nil // Empty slice
+			return 0, fmt.Errorf("flag %s requires a value", flagToken)
 		}
 		if err := c.checkFlagValue(args, args[index+1], flagToken, true, numberShortsMode); err != nil {
 			return 0, err
@@ -1849,9 +1853,9 @@ func (c *Cmd) parseInt64SliceFlag(
 	numberShortsMode bool,
 ) (int, error) {
 	if !f.Variadic {
-		// Single value
+		// Single value (see parseSliceFlag on why a bare flag errors).
 		if index+1 >= len(args) {
-			return 1, nil // Empty slice
+			return 0, fmt.Errorf("flag %s requires a value", flagToken)
 		}
 		if err := c.checkFlagValue(args, args[index+1], flagToken, true, numberShortsMode); err != nil {
 			return 0, err
@@ -1933,9 +1937,9 @@ func (c *Cmd) parseFloat64SliceFlag(
 	numberShortsMode bool,
 ) (int, error) {
 	if !f.Variadic {
-		// Single value
+		// Single value (see parseSliceFlag on why a bare flag errors).
 		if index+1 >= len(args) {
-			return 1, nil // Empty slice
+			return 0, fmt.Errorf("flag %s requires a value", flagToken)
 		}
 		if err := c.checkFlagValue(args, args[index+1], flagToken, true, numberShortsMode); err != nil {
 			return 0, err
@@ -2017,9 +2021,9 @@ func (c *Cmd) parseBoolSliceFlag(
 	numberShortsMode bool,
 ) (int, error) {
 	if !f.Variadic {
-		// Single value
+		// Single value (see parseSliceFlag on why a bare flag errors).
 		if index+1 >= len(args) {
-			return 1, nil // Empty slice
+			return 0, fmt.Errorf("flag %s requires a value", flagToken)
 		}
 		if err := c.checkFlagValue(args, args[index+1], flagToken, false, numberShortsMode); err != nil {
 			return 0, err

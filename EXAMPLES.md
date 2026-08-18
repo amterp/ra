@@ -336,6 +336,29 @@ mycmd --arg2 aaa bbb --arg1 ccc  # Vararg reads until the next flag
 
 ---
 
+## Non-variadic lists need a value
+
+A plain list takes one value per occurrence, so a bare flag is an error rather
+than an empty slice. Only variadic flags collect nothing and stay valid. Without
+this, a list with no default - which is required - could be satisfied by passing
+the flag and nothing else.
+
+```sh
+mycmd --arg1  # Invalid: flag --arg1 requires a value
+```
+
+Repeat the flag to pass several values.
+
+```sh
+mycmd --arg1 aaa --arg1 bbb
+```
+
+| Declared Arg  | Value          |
+|---------------|----------------|
+| `arg1: str[]` | `[ aaa, bbb ]` |
+
+---
+
 ## Multiple Variadics
 
 Input args will be assigned to the first var arg declaration the parser encounters, or until it reaches

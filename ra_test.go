@@ -5432,3 +5432,98 @@ func Test_ListPositional_FlagOnlyListTakesOneValue(t *testing.T) {
 	assert.Equal(t, "a", *first)
 	assert.Equal(t, []string{"x", "y"}, *tags)
 }
+
+// ===========================================
+// BARE LIST FLAGS AT END OF ARGS
+// ===========================================
+
+func Test_BareList_NonVariadicRequiresAValue(t *testing.T) {
+	// A bare list flag used to parse as an empty slice and succeed. Because
+	// the flag counted as configured, it satisfied the required check with
+	// nothing - `mycmd --files` ran with zero files.
+	fs := NewCmd("test")
+
+	files, _ := NewStringSlice("files").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"--files"})
+	assert.EqualError(t, parseErr, "flag --files requires a value")
+	assert.Empty(t, *files)
+}
+
+func Test_BareList_OmittingTheFlagStillReportsItMissing(t *testing.T) {
+	// The companion to the above: the required check must keep firing when
+	// the flag isn't mentioned at all.
+	fs := NewCmd("test")
+
+	NewStringSlice("files").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{})
+	assert.EqualError(t, parseErr, "Missing required arguments: [files]")
+}
+
+func Test_BareList_ShortFormRequiresAValue(t *testing.T) {
+	// Both call sites pass an already-prefixed token, so the short form
+	// reports itself as -f rather than --files.
+	fs := NewCmd("test")
+
+	files, _ := NewStringSlice("files").SetShort("f").Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"-f"})
+	assert.EqualError(t, parseErr, "flag -f requires a value")
+	assert.Empty(t, *files)
+}
+
+func Test_BareList_ErrorsEvenWithADefault(t *testing.T) {
+	// With a default the old behaviour was a silent no-op, which is its own
+	// kind of wrong: the flag was asked for and did nothing.
+	fs := NewCmd("test")
+
+	tags, _ := NewStringSlice("tags").SetDefault([]string{"a", "b"}).Register(fs)
+
+	parseErr := fs.ParseOrError([]string{"--tags"})
+	assert.EqualError(t, parseErr, "flag --tags requires a value")
+	assert.Equal(t, []string{"a", "b"}, *tags)
+}
+
+func Test_BareList_VariadicStillCollectsNothing(t *testing.T) {
+	// Variadic flags are inherently optional and default to empty slices
+	// (USAGE.md), so a bare one is not an error - only the non-variadic
+	// single-value form changed.
+	fs := NewCmd("test")
+
+	files, _ := NewStringSlice("files").SetVariadic(true).Register(fs)
+
+	assert.NoError(t, fs.ParseOrError([]string{"--files"}))
+	assert.Empty(t, *files)
+}
+
+func Test_BareList_TypedListsRequireAValueToo(t *testing.T) {
+	// The same branch is copy-pasted across all five slice parsers.
+	for _, tc := range []struct {
+		name string
+		reg  func(*Cmd)
+	}{
+		{"ints", func(c *Cmd) { NewIntSlice("vals").Register(c) }},
+		{"int64s", func(c *Cmd) { NewInt64Slice("vals").Register(c) }},
+		{"floats", func(c *Cmd) { NewFloat64Slice("vals").Register(c) }},
+		{"bools", func(c *Cmd) { NewBoolSlice("vals").Register(c) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := NewCmd("test")
+			tc.reg(fs)
+			parseErr := fs.ParseOrError([]string{"--vals"})
+			assert.EqualError(t, parseErr, "flag --vals requires a value")
+		})
+	}
+}
+
+func Test_BareList_ValuedFormsStillWork(t *testing.T) {
+	// Guard against over-correcting: the shapes that did work must keep
+	// working, including repeating the flag and the = form.
+	fs := NewCmd("test")
+
+	tags, _ := NewStringSlice("tags").Register(fs)
+
+	assert.NoError(t, fs.ParseOrError([]string{"--tags", "a", "--tags", "b", "--tags=c"}))
+	assert.Equal(t, []string{"a", "b", "c"}, *tags)
+}

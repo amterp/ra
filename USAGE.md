@@ -163,6 +163,7 @@ Arguments:
 - `SetOptional()` and `SetDefault()` with empty slice have no effect on variadic flags
 - Variadic flags always display as `[name...]` in synopsis (never `<name...>`)
 - A non-variadic list is required unless it has a default, so it displays as `<name...>` or `[name...]` accordingly
+- A non-variadic list takes exactly one value per occurrence, so a bare `--name` with nothing after it is an error, not an empty slice. Repeat the flag to pass several values. Variadic flags are the exception: a bare one collects nothing and stays valid
 - **List Positional Precedence**: A list positional arg consumes all remaining positional arguments until a flag is encountered. This holds for variadic and non-variadic lists alike; a flag-only list absorbs nothing
 - **Synopsis Rule**: No positional args appear in synopsis after the first list positional arg (they can only be set via flags)
 - **Registration Error**: Registering a positional-only arg after a list positional arg is an error (impossible to set positionally)

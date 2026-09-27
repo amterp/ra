@@ -101,8 +101,8 @@ The library provides two primary methods for parsing arguments:
 // Parses args, printing usage and exiting on error.
 func (c *Cmd) ParseOrExit(args []string, opts ...ParseOpt)
 
-// Parses args, returning a ParseError on failure.
-func (c *Cmd) ParseOrError(args []string, opts ...ParseOpt) *ParseError
+// Parses args, returning an error on failure.
+func (c *Cmd) ParseOrError(args []string, opts ...ParseOpt) error
 ```
 
 ### Parse Options

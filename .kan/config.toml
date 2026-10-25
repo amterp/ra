@@ -7,3 +7,8 @@ name = "ra"
   icon_type = "letter"
   letter = "R"
   emoji = ""
+
+[linked_boards]
+  [linked_boards.3d0a0ABE]
+    name = "rad/main"
+    remote = "git@github.com:amterp/rad.git"

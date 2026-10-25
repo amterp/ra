@@ -7,31 +7,37 @@ default_column = "uncommitted"
   name = "uncommitted"
   color = "#6b7280"
   limit = 0
+  category = "idea"
 
 [[columns]]
   name = "low"
   color = "#3b82f6"
   limit = 0
+  category = "open"
 
 [[columns]]
   name = "high"
   color = "#f59e0b"
   limit = 0
+  category = "open"
 
 [[columns]]
   name = "next"
   color = "#10b981"
   limit = 0
+  category = "open"
 
 [[columns]]
   name = "in-progress"
   color = "#9333ea"
   limit = 0
+  category = "active"
 
 [[columns]]
   name = "done"
   color = "#ec4899"
   limit = 0
+  category = "done"
 
 [custom_fields]
   [custom_fields.type]

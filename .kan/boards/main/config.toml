@@ -1,57 +1,57 @@
-default_column = "uncommitted"
+kan_schema = "board/14"
 id = "b_1QxU4mriV"
-kan_schema = "board/12"
 name = "main"
-
-[card_display]
-  type_indicator = "type"
+default_column = "uncommitted"
 
 [[columns]]
+  name = "uncommitted"
   color = "#6b7280"
   limit = 0
-  name = "uncommitted"
 
 [[columns]]
+  name = "low"
   color = "#3b82f6"
   limit = 0
-  name = "low"
 
 [[columns]]
+  name = "high"
   color = "#f59e0b"
   limit = 0
-  name = "high"
 
 [[columns]]
+  name = "next"
   color = "#10b981"
   limit = 0
-  name = "next"
 
 [[columns]]
+  name = "in-progress"
   color = "#9333ea"
   limit = 0
-  name = "in-progress"
 
 [[columns]]
+  name = "done"
   color = "#ec4899"
   limit = 0
-  name = "done"
 
 [custom_fields]
   [custom_fields.type]
     type = "enum"
 
     [[custom_fields.type.options]]
-      color = "#dc2626"
       value = "bug"
+      color = "#dc2626"
 
     [[custom_fields.type.options]]
-      color = "#2563eb"
       value = "enhancement"
+      color = "#2563eb"
 
     [[custom_fields.type.options]]
-      color = "#16a34a"
       value = "feature"
+      color = "#16a34a"
 
     [[custom_fields.type.options]]
-      color = "#4b5563"
       value = "chore"
+      color = "#4b5563"
+
+[card_display]
+  type_indicator = "type"
